@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Music in Color",
+    "slug": "music-in-color",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "music-in-color",
+    "userInterfaceStyle": "dark",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "package": "com.musicincolor.mvp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow playback audio analysis. Audio stays on your device.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-status-bar",
+      "expo-asset"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+coverage/
+*.log
+.DS_Store
+android/
+ios/
+fixtures/generated/
