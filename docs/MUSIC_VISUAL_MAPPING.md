@@ -1,5 +1,7 @@
 # Music-to-paint rules — V3.1
 
+**V3.2 superseding trajectory rules:** Default position now comes from adaptive musical phrases, scored canvas placement and confidence-gated nonlinear pitch intervals. Each note retains measured onset/offset, every positive selected rest lifts contact, and section knots/slices preserve planned geometry and pressure. Beat, palette, pigment and native clock rules below remain the shared material/transport baseline. The sine/cosine trajectory is available only through the retained V3.1 comparison. See [V3.2 trajectory rules](V3_2_MELODY_TRAJECTORY.md) and [matched reference evidence](V3_2_REFERENCE_BASELINE.md).
+
 Audio analysis describes musical evidence and uncertainty. The composer turns that evidence into a fixed score. Paint reconstructs the score at supplied song time. The normal player remains minimal; diagnostics are behind the existing DEV triple-tap gesture.
 
 | Musical evidence | Visual interpretation | Limits / settings |

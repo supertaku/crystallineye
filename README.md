@@ -2,7 +2,7 @@
 
 An Android-first, offline visual music prototype built with Expo, React Native and Skia. V3 analyzes the whole imported file, composes a deterministic visual score, and reveals persistent brush marks using the audio player's actual position.
 
-V3.1 preserves continuous brush motion, consumes beat pressure accents, follows a timed harmonic palette, and fixes stale rapid-seek acknowledgment. **The mobile app currently uses measured DSP analysis; on-device note transcription is pending the music/art evaluation gate.** Basic Pitch, Beat This and All-In-One-Infer have run locally on the exact True Colors recording; their complete reference can drive the DEV JSON loader. Physical Android and listening validation remain open. See [remediation validation](docs/V3_REMEDIATION_VALIDATION.md), [music mapping](docs/MUSIC_VISUAL_MAPPING.md) and [current status](docs/V3_STATUS.md).
+V3.2 replaces the default circular trajectory with precomputed phrase placement and note-directed movement, retaining V3.1 and V2 for comparison. It preserves continuous paint, local beat pressure, harmonic pigment and native seek synchronization. **The mobile app currently uses measured DSP analysis; on-device note transcription awaits the required Part 1 artistic review.** Basic Pitch, Beat This and All-In-One-Infer have run locally on the exact True Colors recording; their complete reference can drive the DEV JSON loader. See [V3.2 validation](docs/V3_2_VALIDATION.md), [trajectory rules](docs/V3_2_MELODY_TRAJECTORY.md) and [controlled comparison](docs/V3_2_REFERENCE_BASELINE.md).
 
 ## Run V3
 
@@ -26,7 +26,7 @@ Install `android/app/build/outputs/apk/debug/app-debug.apk` on your Android devi
 
 1. Import a local song. The app checks the file and memory budget, decodes to 22,050 Hz mono, analyzes it, and composes its painting before enabling playback.
 2. Play, pause, seek or replace using the small bottom controls. During playback, controls hide after 2.8 seconds. Tap the field to show them.
-3. Pause freezes the painting. Seeking reconstructs the marks for that song position. Only the current and previous musical section are mounted.
+3. Pause freezes the painting. Seeking reconstructs the marks for that song position. Section layers retain dissolving paint and pre-mount the incoming section.
 4. Importing the same file again reuses analysis cached by content hash and schema/model versions. Changing the composer rebuilds the visual score from cached music.
 
 Files are limited to six minutes, 128 MiB encoded size and an estimated 192 MiB PCM budget. Unsupported or unsafe metadata is rejected before full decoding. Cache files live in the app's document directory. The native decode operation cannot be interrupted midway; Cancel prevents later analysis and waits for that native operation to return.
@@ -51,6 +51,8 @@ npm run validate:paint -- research/results/generated/pop-8ad8874d7c15/song.analy
 ```
 
 For app review, copy the WAV and its matching JSON to your device. Import the WAV normally, then choose **Load research MusicAnalysis JSON** from the developer menu. The loader checks the exact audio SHA-256 and duration before replacing the score. Quality labels and inference warnings remain in developer diagnostics.
+
+For the V3.2 True Colors review, use the exact local MP3 and `.build-tools/true-colors-allinone/true-colors.analysis.json`. In the triple-tap DEV menu, choose **Prepare painting A–D**. A uses measured DSP with V3.1; B uses the reference with V3.1; C uses the identical reference with phrase painting; D removes only notes while retaining the other reference features. These painting modes are separate from the existing clock A–D experiments. Compare at the same native song position and use **Show trajectory geometry, controls and brush tip** to inspect movement explanations. The normal release UI does not expose these research controls.
 
 ## Checks
 

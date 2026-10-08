@@ -8,6 +8,7 @@ import { checkCancelled, yieldAnalysis } from '../analysis/feature-extractor';
 import { composeVisualScore } from '../visual-score/composer';
 import { decodeTrack, hashTrack, inspectTrack } from './audio-decoder';
 import type { AudioMetadata } from './types';
+import { createPaintingComparisons, NATIVE_COMPARISON_DURATION_TOLERANCE, type PaintingComparison } from '../visual-score/comparison-modes';
 
 export type PreparedTrack = PreparedScore & { uri: string; name: string; metadata: AudioMetadata };
 
@@ -46,5 +47,28 @@ export class AudioEngine {
     await this.cache.put(analysis, score);
     await this.cache.rememberReference(analysis);
     return { ...track, analysis, score, cacheHit: false };
+  }
+  /** DEV callers prepare genuine DSP alongside an explicitly loaded note reference. */
+  async comparePaintings(track: PreparedTrack, report: (progress: AnalysisProgress) => void, signal?: AbortSignal): Promise<PaintingComparison[]> {
+    if (!track.analysis.notes.length) throw new Error('Load a matching note-bearing research analysis before preparing A–D.');
+    checkCancelled(signal);
+    let fallback: PreparedScore | null = null;
+    try { fallback = await this.cache.get(track.analysis.track.hash, FALLBACK_VERSIONS); } catch { /* Measure again when reuse fails. */ }
+    if (!fallback || Math.abs(fallback.analysis.track.duration - track.analysis.track.duration) > NATIVE_COMPARISON_DURATION_TOLERANCE) {
+      report({ stage: 'decode', stageProgress: 0, overallProgress: 0 });
+      const currentHash = await hashTrack(track.uri, signal);
+      if (currentHash !== track.analysis.track.hash) throw new Error('The source file changed. Import the original audio again.');
+      const decoded = await decodeTrack(track.uri, track.metadata, signal);
+      report({ stage: 'decode', stageProgress: 1, overallProgress: .2 });
+      const analysis = await analyzeTrack(decoded, currentHash, report, signal);
+      checkCancelled(signal);
+      const score = composeVisualScore(analysis);
+      try { await this.cache.put(analysis, score); } catch { /* Comparisons can still run without persistent cache. */ }
+      fallback = { analysis, score, cacheHit: false };
+    }
+    checkCancelled(signal);
+    const comparisons = createPaintingComparisons(fallback.analysis, track.analysis, { allowNativeDurationDifference: true });
+    report({ stage: 'visual-score', stageProgress: 1, overallProgress: 1 });
+    return comparisons;
   }
 }

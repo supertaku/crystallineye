@@ -1,5 +1,13 @@
 # V3 architecture
 
+## V3.2 Part 1 update — 2026-10-08
+
+`MusicAnalysis → bounded selected contour → MusicalPhrase → deterministic phrase layout → timed gesture geometry → VisualScore → native audio position → existing Skia ribbons`
+
+The composer defaults to `paint-composer-3.2`, preserving `analysis-v3.1` and the expensive music cache. Exact note contact runs and section slices carry optional phrase IDs. Render-ready `trajectoryDiagnostics` store boundaries, note anchors, confidence and placement explanations before playback. The new DEV overlay and cached diagnostic index consume that score; they do not interpret raw notes per frame. Renderer materials and clock authority remain unchanged. An explicit legacy composer option reproduces V3.1 for painting A–D comparisons independently of the existing clock diagnostics.
+
+Normal import still uses DSP without note transcription. A DEV comparison preparation bypasses remembered desktop references only to obtain genuine DSP for mode A; B/C share the exact reference, D explicitly removes note evidence. Changing painting mode retains the source transport and paused native position. See [trajectory details](V3_2_MELODY_TRAJECTORY.md) and [current validation](V3_2_VALIDATION.md). The historical architecture below is retained; mobile ML begins after the separate artistic acceptance checkpoint.
+
 ## V3.1 remediation update — 2026-10-08
 
 The current composer is `paint-composer-3.1`. It preserves brush endpoints and velocities across gestures, lifts contact at selected rests/decoded silence, emits timed harmonic palette keyframes and local pressure accents, and places transient drops near the brush. Paint uses continuous pressure ribbons and exact-time cubic prefixes. Native seeks use a bounded acknowledgment window; DEV A–D experiments and a bounded clock trace isolate score, delivery and scene commit timing. See [brush architecture](BRUSH_RENDERING_ARCHITECTURE.md), [mapping](MUSIC_VISUAL_MAPPING.md), and [validation](V3_REMEDIATION_VALIDATION.md).

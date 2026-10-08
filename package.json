@@ -17,7 +17,8 @@
     "validate:reference": "tsx scripts/validate-reference.ts",
     "fixtures:v3": "tsx scripts/generate-v3-fixtures.ts",
     "benchmark:v3": "tsx scripts/benchmark-v3.ts",
-    "compare:reference": "tsx scripts/compare-true-colors.ts"
+    "compare:reference": "tsx scripts/compare-true-colors.ts",
+    "compare:v32": "tsx scripts/compare-v32.ts"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",

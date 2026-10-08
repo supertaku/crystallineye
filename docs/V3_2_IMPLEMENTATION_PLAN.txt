@@ -1,0 +1,2250 @@
+# CODEX MASTER IMPLEMENTATION PLAN
+# CRYSTALLINEYE V3.2 — MUSIC-DIRECTED PAINTING + ON-DEVICE BASIC PITCH
+
+## Your role
+
+You are the lead engineer responsible for implementing the next two major milestones of Crystallineye, an Android-first, offline music-to-color application.
+
+Repository: https://github.com/supertaku/crystallineye
+
+Execute this plan carefully using specialist agents where supported. Research and inspect the actual repository before changing code. Make implementation decisions based on verified evidence, not assumptions.
+
+**The two objectives are:**
+
+1. Replace the existing circular, predetermined brush movement with composition-driven painting that responds meaningfully to notes, melodic phrases, rhythm, and harmony.
+2. Integrate Spotify Basic Pitch directly into the Android app so imported music can be transcribed locally, without Python, internet access, or manual JSON importing.
+
+Treat these as separate milestones with a strict acceptance gate between them.
+
+Do not begin Part 2 until Part 1 has demonstrated meaningful improvement with the existing desktop-generated musical analysis.
+
+---
+
+# 1. Product vision
+
+Crystallineye should transform an imported song into a visual painting that unfolds in synchronization with the musical composition.
+
+The intended experience is not:
+
+```text
+Song plays
+    ↓
+A colored line moves in a predetermined circular pattern
+    ↓
+Energy and pitch slightly modify that line
+```
+
+Instead:
+
+```text
+Song is imported
+    ↓
+Audio is decoded
+    ↓
+Musical notes and features are extracted
+    ↓
+Melodic phrases are identified
+    ↓
+Musical events become painting instructions
+    ↓
+Brush strokes, pigment and color follow the composition
+    ↓
+The user watches a painting created by the song
+```
+
+The desired visual language includes:
+
+- fluid brush strokes;
+- watercolor or ink-like pigment;
+- continuous gestures;
+- restrained organic curvature;
+- harmonious color changes;
+- visible relationships between music and movement;
+- persistent paint;
+- meaningful silence and negative space.
+
+Avoid defaulting to equalizer bars, random particle effects, circular trails, or procedural wallpaper.
+
+---
+
+# 2. Mandatory initial repository audit
+
+Before modifying code, read:
+
+```text
+PRODUCT_REQUIREMENTS.md
+AGENTS.md
+JOURNAL.md
+
+docs/V3_STATUS.md
+docs/V3_ARCHITECTURE.md
+docs/V3_REMEDIATION_VALIDATION.md
+docs/MUSIC_VISUAL_MAPPING.md
+docs/BRUSH_RENDERING_ARCHITECTURE.md
+docs/TRUE_COLORS_ANALYSIS.md
+docs/TRUE_COLORS_AB_TEST.md
+docs/ML_FEASIBILITY.md
+docs/ANDROID_PERFORMANCE.md
+```
+
+Inspect these source files:
+
+```text
+src/analysis/analysis-engine.ts
+src/analysis/analysis-schema.ts
+src/analysis/melody-extractor.ts
+src/analysis/versions.ts
+src/analysis/analysis-cache.ts
+
+src/audio-v3/audio-engine.ts
+src/audio-v3/audio-decoder.ts
+src/audio-v3/audio-transport.ts
+
+src/visual-score/composer.ts
+src/visual-score/stroke-generator.ts
+src/visual-score/palette.ts
+src/visual-score/scenes.ts
+src/visual-score/schema.ts
+
+src/paint/StrokeLayer.tsx
+src/paint/PaintCanvas.tsx
+src/paint/scene-runtime.ts
+src/paint/score-player.ts
+
+src/components/V3MusicScreen.tsx
+
+research/analysis/basic_pitch_reference.py
+research/analysis/analyze.py
+```
+
+Also inspect current tests, dependencies, Expo configuration, Android build scripts, and generated diagnostic tooling.
+
+### Establish baseline
+
+Record:
+
+- current Git commit;
+- working tree status;
+- package versions;
+- current native build status;
+- current test status;
+- known physical-device limitations.
+
+Do not overwrite uncommitted user changes.
+
+Create a feature branch:
+
+```bash
+git switch -c codex/v3.2-melody-driven-paint-mobile-ml
+```
+
+If an appropriate working branch already exists, reuse it.
+
+Preserve V2 and V3.1 comparison functionality.
+
+Do not delete the existing audio engine, Skia renderer, or research tooling.
+
+---
+
+# 3. Existing repository facts
+
+The current project already includes:
+
+- Expo SDK 57;
+- React Native 0.86.3;
+- React Native Audio API 0.13.6;
+- React Native Skia 2.6.2;
+- Reanimated 4.5.1;
+- 22,050 Hz mono decoding;
+- deterministic DSP analysis;
+- music-analysis caching;
+- `MusicAnalysis`;
+- `VisualScore`;
+- Skia painting;
+- native playback-clock synchronization;
+- Basic Pitch desktop references;
+- Beat This! desktop references;
+- All-In-One-Infer desktop references.
+
+The current reference recording is expected at:
+
+```text
+music/Justin Timberlake, Anna Kendrick - True Colors (Lyric).mp3
+```
+
+Previously documented source SHA-256:
+
+```text
+72621718f6e76530d87400479aed14bf7e1d7bf6ba71f857815db83007d45c92
+```
+
+Verify the file and hash locally.
+
+Do not assume this file exists in the remote GitHub repository; the music directory is intentionally excluded from version control.
+
+Previously documented desktop analysis produced approximately:
+
+```text
+2,076 Basic Pitch polyphonic note predictions
+614 selected melodic-contour notes
+286 Beat This! small-model beats
+98 predicted downbeats
+14 All-In-One-Infer sections
+```
+
+These are prior research results, not a verified transcription of the singers.
+
+Do not present them as musical ground truth.
+
+The normal Android import currently performs DSP analysis and generates:
+
+```ts
+notes: []
+```
+
+That is the capability gap to address in Part 2.
+
+---
+
+# 4. Why Part 1 is necessary
+
+The current brush trajectory includes these formulas:
+
+```ts
+x = 0.5 - 0.36 * Math.cos(contactSeconds * 0.25);
+```
+
+and a vertical target resembling:
+
+```ts
+targetY =
+  0.5
+  - pitchInfluence
+  + Math.sin(contactSeconds * 0.2) * 0.055;
+```
+
+The horizontal movement is primarily a mathematical oscillation.
+
+The vertical movement combines musical features with another oscillation.
+
+This naturally produces repeating circular or oval-like paths.
+
+Adding machine learning would improve pitch information, but the underlying trajectory would still be predominantly determined by those oscillations.
+
+**Part 1 must therefore change the visual composition algorithm before Android ML integration.**
+
+---
+
+# PART 1 — IMPLEMENT MELODY-DIRECTED PAINTING
+
+## Milestone 1.0 — Establish a controlled reference
+
+### Objective
+
+Prove that the new brush engine correctly interprets note data that already exists.
+
+Do not install mobile ML during this milestone.
+
+### Reference material
+
+Use the local True Colors recording and its existing desktop-generated MusicAnalysis.
+
+Preferred reference:
+
+```text
+.build-tools/true-colors-allinone/true-colors.analysis.json
+```
+
+Fallback reference:
+
+```text
+research/results/generated/
+```
+
+Find the actual output path rather than inventing one.
+
+The reference must:
+
+- match the imported audio SHA-256;
+- pass `parseMusicAnalysis()`;
+- contain timestamped note predictions;
+- contain beat/downbeat predictions;
+- contain harmony and dynamics;
+- contain valid section boundaries.
+
+### Establish four comparison modes
+
+Preserve:
+
+```text
+A — Existing V3.1 brush trajectory + DSP analysis
+B — Existing V3.1 brush trajectory + desktop ML analysis
+```
+
+Add:
+
+```text
+C — New melody-driven brush + same desktop ML analysis
+D — New melody-driven brush + reduced musical information
+```
+
+Mode C versus B isolates the visual-composition improvement.
+
+Mode C versus D shows whether the added note interpretation actually matters.
+
+All modes must use the same source recording and playback clock.
+
+### Deliverable
+
+```text
+docs/V3_2_REFERENCE_BASELINE.md
+```
+
+Include screenshots, representative passages, score counts, and what is still unverified.
+
+---
+
+## Milestone 1.1 — Introduce musical phrases
+
+### Objective
+
+Turn a sequence of individual note predictions into meaningful musical gestures.
+
+A visual stroke should normally correspond to a coherent musical phrase, not an arbitrary four-second interval.
+
+### Inspect the existing melody extractor
+
+The current extractor uses a bounded dynamic-programming path through polyphonic notes.
+
+Preserve that foundation.
+
+However, distinguish three concepts:
+
+```text
+RawNoteEvents
+    ↓
+SelectedMelody
+    ↓
+MusicalPhrases
+```
+
+Do not make the renderer reconstruct phrase semantics by examining raw notes repeatedly.
+
+### Create phrase detection
+
+Suggested files:
+
+```text
+src/analysis/phrase-segmenter.ts
+src/analysis/melodic-contour.ts
+src/analysis/phrase-types.ts
+```
+
+Proposed types:
+
+```ts
+type MusicalPhrase = {
+  id: string;
+  start: number;
+  end: number;
+
+  notes: NoteEvent[];
+
+  pitchMin: number;
+  pitchMax: number;
+
+  averageEnergy: number;
+
+  contour: MelodicContour;
+
+  confidence: number;
+};
+
+type MelodicContour = {
+  direction: "ascending" | "descending" | "stable" | "mixed";
+  intervalChanges: number[];
+  register: number;
+};
+```
+
+### Phrase segmentation rules
+
+Evaluate:
+
+- note gaps;
+- sustained notes;
+- phrase-level rests;
+- pitch continuity;
+- large melodic intervals;
+- beat/downbeat context;
+- section boundaries.
+
+Begin with a configurable rest threshold around 0.4–1.2 seconds.
+
+Do not impose one universal threshold on all songs.
+
+Do not divide long phrases solely because a bar ended.
+
+Do not join unrelated phrases merely because a beat continued.
+
+### Important limitation
+
+Basic Pitch predicts notes from a mixed recording.
+
+Do not call the selected phrase a verified vocal phrase.
+
+Use labels such as:
+
+```text
+selected melodic contour
+```
+
+until singer-specific identification is supported by evidence.
+
+### Tests
+
+Create synthetic note sequences for:
+
+- ascending melody;
+- descending melody;
+- repeated note;
+- sustained note;
+- separated phrases;
+- overlapping instruments;
+- abrupt pitch changes;
+- long silence;
+- noisy low-confidence notes.
+
+Verify that phrase boundaries and duration are deterministic.
+
+### Exit criteria
+
+The note timeline produces a stable, explainable sequence of phrases with meaningful rests.
+
+---
+
+## Milestone 1.2 — Replace the circular trajectory
+
+### Objective
+
+Remove fixed oscillating screen movement as the primary source of brush direction.
+
+### Stop using these as primary position rules
+
+```ts
+Math.cos(contactSeconds * 0.25)
+Math.sin(contactSeconds * 0.2)
+```
+
+They may remain in optional, very small-scale organic texture effects.
+
+They must no longer determine the main stroke trajectory.
+
+### New principle
+
+A brush path should be generated from:
+
+```text
+phrase timing
++
+note durations
++
+relative pitch
++
+pitch intervals
++
+phrase direction
++
+musical dynamics
+```
+
+### Introduce a trajectory planner
+
+Create:
+
+```text
+src/visual-score/phrase-layout.ts
+src/visual-score/trajectory-planner.ts
+src/visual-score/gesture-generator.ts
+```
+
+Suggested interface:
+
+```ts
+interface TrajectoryPlanner {
+  plan(
+    phrase: MusicalPhrase,
+    context: CompositionContext
+  ): PlannedGesture;
+}
+```
+
+Where:
+
+```ts
+type PlannedGesture = {
+  phraseId: string;
+
+  start: number;
+  end: number;
+
+  controlPoints: TimedControlPoint[];
+
+  startPosition: Point;
+  endPosition: Point;
+
+  colorEvents: TimedColorEvent[];
+
+  confidence: number;
+};
+```
+
+### Coordinate strategy
+
+Use a two-level layout.
+
+**Level A: phrase layout**
+
+Choose where a musical phrase should occupy space on the canvas.
+
+Consider:
+
+- previous gesture location;
+- available canvas space;
+- section structure;
+- phrase energy;
+- phrase register;
+- existing pigment;
+- visual density.
+
+**Level B: note-level trajectory**
+
+Within that phrase, derive the brush path from the note sequence.
+
+Use:
+
+```text
+note timing → temporal progression
+pitch interval → vertical displacement tendency
+note duration → duration of movement
+melodic contour → broad gesture direction
+```
+
+Avoid making every note move a fixed number of pixels.
+
+### Important artistic constraint
+
+Do not simply replace the circular line with a piano-roll graph.
+
+The output should remain a painting.
+
+Use musical information to control smooth gesture curvature, not draw literal note rectangles.
+
+---
+
+## Milestone 1.3 — Map note changes to brush movement
+
+### Pitch movement
+
+For successive notes:
+
+```ts
+interval = nextNote.midi - currentNote.midi;
+```
+
+Interpret:
+
+```text
+positive interval
+→ upward melodic tendency
+
+negative interval
+→ downward melodic tendency
+
+zero interval
+→ steady or nearly steady movement
+```
+
+Use a nonlinear mapping that prevents extreme leaps.
+
+For example, investigate:
+
+```ts
+movement = tanh(interval / intervalScale);
+```
+
+Do not use raw MIDI differences directly as pixel distances.
+
+### Duration
+
+The amount of musical time assigned to each gesture segment must match the note's measured onset and offset.
+
+Example:
+
+```text
+short note
+→ short brush articulation
+
+long note
+→ prolonged brush gesture
+```
+
+A long note should not necessarily mean a long straight line. It can produce a sustained controlled curve, a slowly widening ribbon, or a nearly stationary pigment deposition.
+
+### Velocity and curvature
+
+Use smooth cubic curves.
+
+Enforce continuity where notes belong to the same phrase.
+
+Permit a deliberate direction change when the musical contour changes sharply.
+
+Avoid forcing every gesture to be C1-continuous if there is a genuine musical break; deliberate brush lifts are valid.
+
+### Note confidence
+
+When a note prediction is uncertain:
+
+- reduce trajectory specificity;
+- avoid dramatic jumps;
+- favor the established phrase direction.
+
+Do not interpret low-confidence notes as major movements.
+
+---
+
+## Milestone 1.4 — Make gestures spatially meaningful
+
+### Problem to avoid
+
+A single melody-driven curve could still become a narrow line moving across the middle of the screen.
+
+The next renderer should make use of the canvas rather than drawing one permanent central ribbon.
+
+### Composition-aware phrase placement
+
+Implement an occupancy-aware layout.
+
+Maintain a coarse spatial map of existing marks:
+
+```text
+canvas regions
+→ occupied / relatively empty
+```
+
+Choose new phrase placement based on:
+
+- continuity with the preceding phrase;
+- avoiding excessive overlap;
+- controlled visual balance;
+- section-level transitions.
+
+Use a small number of deterministic candidate locations.
+
+Score candidates rather than choosing fully random coordinates.
+
+Example factors:
+
+```text
+placementScore =
+  continuity
+  + availableSpace
+  + phraseDirectionCompatibility
+  + sectionBalance
+  - excessiveOverlap
+```
+
+Weights are artistic parameters to evaluate.
+
+They are not scientific musical constants.
+
+### Layout constraints
+
+- Avoid unexplained brush teleportation.
+- Allow meaningful brush lifts.
+- Use more vertical space than V3.1.
+- Avoid continuously circling around the center.
+- Preserve a balanced composition.
+- Do not abruptly clear the painting at each bar.
+
+### Visual variety
+
+Different songs and phrases should produce different gesture trajectories.
+
+However, the same song and analysis versions must produce the same result.
+
+---
+
+## Milestone 1.5 — Preserve rhythm and harmony semantics
+
+Do not discard the working beat, palette, and pigment systems.
+
+### Beat
+
+Continue:
+
+```text
+beat → brush pressure/accent
+```
+
+Avoid full-screen pulsing.
+
+### Downbeat
+
+Use downbeats as optional phrase/articulation cues.
+
+Do not force a new brush origin at every downbeat.
+
+### Dynamics
+
+Use:
+
+```text
+energy → pressure, width, opacity
+```
+
+### Harmony
+
+Use:
+
+```text
+chord/pitch-class evidence → pigment palette
+```
+
+Continue confidence-gated color changes.
+
+### Onsets
+
+Use strong transient events for local pigment changes or drops.
+
+Do not turn every onset into a new major brush stroke.
+
+### Silence
+
+When the selected melodic line is inactive:
+
+- lift the brush;
+- stop melodic paint deposition;
+- optionally allow other verified musical layers to remain active.
+
+Do not confuse a melodic rest with complete audio silence.
+
+That distinction matters for full songs containing accompaniment.
+
+---
+
+## Milestone 1.6 — Adapt VisualScore without coupling to ML
+
+The painter must not know whether notes came from Python, TFLite, or a future model.
+
+Maintain:
+
+```text
+MusicAnalysis
+    ↓
+Melody/Phrase Interpretation
+    ↓
+VisualScore
+    ↓
+Skia Renderer
+```
+
+The `VisualScore` should contain all necessary timed gesture geometry.
+
+Do not run the note interpretation network during rendering.
+
+Do not calculate complex musical structure on every frame.
+
+### Versioning
+
+Increment the composer version.
+
+A composer update should regenerate the visual score from cached musical analysis without rerunning ML.
+
+Avoid invalidating expensive musical analysis just because the brush style changes.
+
+---
+
+## Milestone 1.7 — Preserve the existing smooth painter
+
+Reuse the V3.1 improvements:
+
+- cubic Hermite curves;
+- smooth shared tangents;
+- pressure-aware ribbons;
+- deterministic event-time lookup;
+- local beat envelopes;
+- controlled pigment diffusion;
+- seek reconstruction;
+- Skia geometry consolidation.
+
+Do not replace the existing Skia architecture wholesale.
+
+Do not introduce a fluid-simulation engine during this milestone.
+
+Keep the existing shader as a pigment/material effect.
+
+The goal is to fix musical authorship of brush paths first.
+
+---
+
+## Milestone 1.8 — Add trajectory diagnostics
+
+Create a DEV-only diagnostic mode displaying:
+
+```text
+current song timestamp
+
+active musical phrase
+active note
+note MIDI pitch
+note start/end
+
+melodic interval
+phrase direction
+
+brush X/Y
+brush velocity
+brush pressure
+
+active gesture ID
+```
+
+Include a mode that shows:
+
+- underlying note trajectory;
+- control points;
+- active brush tip;
+- previous completed gesture;
+- planned next gesture.
+
+The debug view must make it possible to answer:
+
+> Why did the brush move in this direction at this particular time?
+
+Every major position change should have a traceable explanation.
+
+---
+
+## Milestone 1.9 — Compare the old and new trajectory
+
+Use the exact True Colors reference analysis.
+
+Evaluate:
+
+```text
+A — old cosine/sine trajectory
+B — new phrase-driven trajectory
+```
+
+The audio, musical analysis, renderer, and colors must remain identical.
+
+Only the trajectory planner changes.
+
+### Quantitative measures
+
+Record:
+
+- total brush travel;
+- unexplained position discontinuities;
+- gesture count;
+- repeated-path similarity;
+- canvas coverage;
+- direction-change timing;
+- phrase onset alignment;
+- phrase duration alignment.
+
+### Qualitative review
+
+Inspect multiple passages:
+
+- an ascending melodic phrase;
+- a descending phrase;
+- a sustained note;
+- a phrase break;
+- a harmonically changing passage;
+- a relatively quiet passage.
+
+Do not claim the song's actual melody was recognized correctly without listening or labeled ground truth.
+
+### Exit criteria for Part 1
+
+Part 1 may be accepted when:
+
+1. The cosine/sine functions no longer determine primary brush movement.
+2. Musical phrases determine gesture start and stop.
+3. Pitch movement influences trajectory.
+4. Note duration influences gesture timing.
+5. Rests are visibly represented.
+6. Beat accents modify brush pressure.
+7. Harmony continues to influence colors.
+8. No unexplained brush teleporting occurs.
+9. The painting is deterministic across pause/seek/replay.
+10. Reference-backed playback looks meaningfully different from V3.1.
+11. The user can assess whether the new artistic behavior matches the intended experience.
+
+If the result still looks like a single graph line, refine the gesture grammar before proceeding to Part 2.
+
+---
+
+# PART 2 — IMPLEMENT BASIC PITCH ON ANDROID
+
+## Milestone 2.0 — Technical feasibility and dependency audit
+
+### Objective
+
+Prove that the official Basic Pitch TFLite model can load and run inside the existing Expo development build.
+
+Research and verify the current official sources:
+
+Spotify Basic Pitch:
+https://github.com/spotify/basic-pitch
+
+Basic Pitch inference:
+https://github.com/spotify/basic-pitch/blob/main/basic_pitch/inference.py
+
+Basic Pitch note creation:
+https://github.com/spotify/basic-pitch/blob/main/basic_pitch/note_creation.py
+
+React Native Fast TFLite:
+https://github.com/margelo/react-native-fast-tflite
+
+Fast TFLite migration guide:
+https://github.com/margelo/react-native-fast-tflite/blob/main/MIGRATION_V2_TO_V3.md
+
+Expo native development:
+https://docs.expo.dev/workflow/customizing/
+
+### Check compatibility
+
+Verify compatibility with the project's existing:
+
+```text
+Expo SDK 57
+React Native 0.86.3
+Hermes
+Android Gradle setup
+Java 21 build path
+react-native-audio-api 0.13.6
+React Native Skia
+Reanimated
+```
+
+Do not upgrade Expo or React Native automatically.
+
+Use the currently supported Fast TFLite release only after checking native compatibility.
+
+### Required packages
+
+Likely:
+
+```bash
+npm install react-native-fast-tflite react-native-nitro-modules
+```
+
+Inspect the exact version's peer dependencies before installing.
+
+The current Fast TFLite v3 uses Nitro Modules.
+
+Do not follow older examples designed for Fast TFLite v2.
+
+### Initial execution policy
+
+Use CPU inference.
+
+Do not enable GPU delegates or NNAPI yet.
+
+First prove:
+
+```text
+model loads
+→ input accepted
+→ outputs valid
+→ native build works
+```
+
+### Exit criteria
+
+A minimal Android model-loading spike runs successfully without disrupting music playback or Skia.
+
+If native compatibility fails, document the exact error and attempt a bounded compatibility fix.
+
+Do not proceed by silently replacing the model with random note predictions.
+
+---
+
+## Milestone 2.1 — Obtain the official Basic Pitch model
+
+Use the official Spotify TFLite serialization associated with the selected Basic Pitch release.
+
+The official package exposes a TFLite model under its saved-model assets.
+
+Inspect the package source to locate the exact model file.
+
+Do not use an arbitrary third-party conversion unless the official checkpoint is unavailable or incompatible.
+
+### Record provenance
+
+Create:
+
+```text
+docs/BASIC_PITCH_MODEL_PROVENANCE.md
+```
+
+Include:
+
+- source repository;
+- source release/tag;
+- model filename;
+- SHA-256;
+- file size;
+- model serialization;
+- declared input tensor;
+- output tensors;
+- dtype;
+- tensor shapes;
+- licensing;
+- model version identifier.
+
+### Licensing
+
+Review the official Apache 2.0 licensing documentation and ensure bundled code/checkpoint attribution and required notices are retained.
+
+Also verify the Fast TFLite runtime's license and its transitive distribution requirements.
+
+Do not bundle files whose redistribution rights are unclear.
+
+### Model asset
+
+Store in an appropriate asset directory, for example:
+
+```text
+assets/models/basic-pitch/
+```
+
+Keep filenames and model hashes stable.
+
+Avoid downloading the model every time the user opens the application.
+
+The intended experience is fully offline after installation.
+
+---
+
+## Milestone 2.2 — Configure Expo Metro for TFLite
+
+Create or update:
+
+```text
+metro.config.js
+```
+
+using Expo's official Metro configuration.
+
+For example:
+
+```js
+const { getDefaultConfig } = require("expo/metro-config");
+
+const config = getDefaultConfig(__dirname);
+
+config.resolver.assetExts.push("tflite");
+
+module.exports = config;
+```
+
+Preserve any existing Metro customization.
+
+Do not replace Expo's default configuration with a bare React Native configuration.
+
+### Verify
+
+- the `.tflite` file resolves;
+- the asset is included in the Android bundle;
+- loading does not require network access;
+- model loading works after a cold start.
+
+---
+
+## Milestone 2.3 — Create a minimal TFLite runner
+
+Suggested structure:
+
+```text
+src/ml/
+    types.ts
+    model-registry.ts
+
+    basic-pitch/
+        model-loader.ts
+        model-adapter.ts
+        model-metadata.ts
+        inference.ts
+        types.ts
+```
+
+Create an adapter that hides the runtime implementation from the rest of the app.
+
+Example interface:
+
+```ts
+interface NoteTranscriptionModel {
+  load(): Promise<void>;
+
+  inferWindow(
+    samples: Float32Array
+  ): Promise<BasicPitchWindowOutput>;
+
+  dispose(): Promise<void>;
+}
+```
+
+Adapt the lifecycle to the actual native API.
+
+### Important Fast TFLite v3 API detail
+
+Current v3 uses `ArrayBuffer` inputs and outputs.
+
+Do not blindly pass a typed-array backing buffer if the typed array is only a view into a larger buffer.
+
+Use exact-length buffers.
+
+Conceptually:
+
+```ts
+const input = samples.buffer.slice(
+  samples.byteOffset,
+  samples.byteOffset + samples.byteLength
+);
+```
+
+Check the actual model tensor metadata before interpreting outputs.
+
+Do not assume the outputs are always ordered:
+
+```text
+notes
+onsets
+contours
+```
+
+Discover and validate their names/shapes and use a verified index mapping.
+
+### Exit criteria
+
+A known synthetic input window runs through the model on Android and produces finite, correctly shaped tensors.
+
+This is only an inference smoke test, not transcription validation.
+
+---
+
+## Milestone 2.4 — Reproduce Basic Pitch preprocessing
+
+This is a high-risk part of the integration.
+
+The current audio decoder already provides:
+
+```text
+22,050 Hz
+mono
+Float32Array PCM
+```
+
+That is compatible with Basic Pitch's nominal analysis sample rate.
+
+But correct sample rate alone is not enough.
+
+Basic Pitch expects specific overlapping audio windows and padding behavior.
+
+### Inspect official constants
+
+Use the pinned official implementation to establish:
+
+```text
+AUDIO_SAMPLE_RATE
+AUDIO_N_SAMPLES
+FFT_HOP
+ANNOT_N_FRAMES
+DEFAULT_OVERLAPPING_FRAMES
+window hop
+initial padding
+final padding
+```
+
+Derive them from the actual pinned upstream code.
+
+Do not copy undocumented dimensions from a tutorial.
+
+### New files
+
+```text
+src/ml/basic-pitch/windowing.ts
+src/ml/basic-pitch/preprocessing.ts
+```
+
+### Implement
+
+1. Validate mono float PCM.
+2. Normalize input shape without changing amplitude unexpectedly.
+3. Apply the required initial padding.
+4. Split into overlapping windows.
+5. Handle the final short window correctly.
+6. Track the original sample positions for every window.
+7. Produce exactly shaped model inputs.
+8. Reject invalid values such as NaN and Infinity.
+
+### Memory management
+
+Avoid copying the full decoded song for every model window.
+
+Use a bounded working buffer.
+
+An analysis of a four-minute song at 22,050 Hz mono contains roughly 21 MB of raw Float32 PCM before other memory overhead.
+
+The inference implementation must account for:
+
+- decoder buffers;
+- downmixed PCM;
+- TFLite input;
+- TFLite outputs;
+- assembled activation tensors;
+- postprocessing;
+- React Native/Skia memory.
+
+Avoid holding unnecessary duplicate full-song tensors.
+
+---
+
+## Milestone 2.5 — Build a Python TFLite parity reference
+
+The current desktop reference uses official Basic Pitch ONNX.
+
+That is valuable, but the mobile implementation will use TFLite.
+
+Therefore add an intermediate reference:
+
+```text
+Python official Basic Pitch TFLite
+```
+
+The required comparison chain is:
+
+```text
+Python ONNX
+      ↕
+Python TFLite
+      ↕
+Android TFLite
+```
+
+This separates differences caused by model serialization from differences caused by the Android implementation.
+
+### Build reference fixtures
+
+Use legal synthetic audio:
+
+- A4 / 440 Hz;
+- simple monophonic melody;
+- ascending scale;
+- descending scale;
+- repeated notes;
+- sustained note;
+- short separated notes;
+- two simultaneous pitched tones;
+- silence;
+- noise/transient case.
+
+Also evaluate selected windows of the local True Colors reference.
+
+Do not commit copyrighted source audio.
+
+### Compare
+
+For each test window:
+
+```text
+input PCM
+input tensor
+raw output tensors
+postprocessed note events
+```
+
+Store compact legal fixture results.
+
+### Required metrics
+
+- input element count;
+- input numerical difference;
+- output shape;
+- output finite-value validation;
+- mean absolute tensor error;
+- maximum tensor error;
+- note-event agreement;
+- note timing agreement;
+- pitch agreement.
+
+Do not require bit-identical floating-point inference between different backends.
+
+Set tolerances based on controlled reference results.
+
+---
+
+## Milestone 2.6 — Handle Basic Pitch timestamp alignment
+
+This is critical for Crystallineye because visual synchronization depends on precise event times.
+
+The official Basic Pitch implementation uses overlapping windows and removes overlapping output frames.
+
+It also converts output-frame positions into timestamps using a specific alignment convention.
+
+An open upstream issue has reported possible long-duration frame-time drift.
+
+Do not invent a timing correction from an issue report alone.
+
+### Investigate the timing mathematically
+
+Document:
+
+```text
+input window start in samples
+window hop in samples
+model output frame positions
+overlap removal
+global frame offsets
+note onset conversion
+note offset conversion
+```
+
+Create a canonical function:
+
+```ts
+function modelFrameToAudioTime(
+  frame: number,
+  context: AlignmentContext
+): number;
+```
+
+Prefer computing true audio-time positions from the original window/sample mapping where supported by reference evidence.
+
+### Long-track testing
+
+Use synthetic notes occurring near:
+
+```text
+10 seconds
+60 seconds
+120 seconds
+200 seconds
+```
+
+For each test:
+
+- record known ground-truth onset;
+- run Python ONNX;
+- run Python TFLite;
+- run Android TFLite;
+- compare timestamp errors.
+
+If the official Python implementation shows systematic drift, record it separately from Android porting errors.
+
+Do not silently change the mobile timing formula while claiming exact upstream parity.
+
+A corrected timing mode may be introduced only with clear evidence, documentation, and versioning.
+
+### Acceptance target
+
+Prefer onset timing error within approximately 50 ms on controlled synthetic tests, subject to the model's inherent temporal resolution.
+
+Do not claim sample-accurate timing from a frame-based neural transcription model.
+
+---
+
+## Milestone 2.7 — Implement complete note postprocessing
+
+Raw Basic Pitch tensors are not musical note events.
+
+Implement the official postprocessing semantics.
+
+Suggested files:
+
+```text
+src/ml/basic-pitch/postprocessing.ts
+src/ml/basic-pitch/note-decoder.ts
+src/ml/basic-pitch/alignment.ts
+```
+
+Inspect and reproduce:
+
+- note activation thresholds;
+- onset thresholds;
+- inferred onsets;
+- minimum note duration;
+- note offset logic;
+- polyphonic note extraction;
+- frequency/MIDI mapping;
+- overlap handling;
+- optional Melodia-style postprocessing;
+- pitch bend extraction where feasible.
+
+Use the official source as the specification.
+
+### Version one
+
+Prioritize:
+
+```text
+start
+end
+MIDI pitch
+amplitude
+```
+
+Pitch bends can be added after stable event parity.
+
+Do not drop pitch bends silently if a fixture or future feature requires them; document whether that part of Basic Pitch is supported.
+
+### Confidence
+
+The repository currently uses mean note activation as a confidence-like value.
+
+Keep that distinction.
+
+Do not describe the value as a calibrated probability that the detected note is correct.
+
+### Validation
+
+Compare Android results with Python TFLite note creation.
+
+Use event matching with explicit:
+
+```text
+onset tolerance
+offset tolerance
+pitch tolerance
+one-to-one assignment
+```
+
+Report precision, recall and F1 against the reference.
+
+This measures cross-platform parity, not absolute transcription accuracy.
+
+---
+
+## Milestone 2.8 — Run whole-song transcription on Android
+
+Create:
+
+```text
+src/ml/basic-pitch/transcriber.ts
+src/ml/basic-pitch/transcription-progress.ts
+```
+
+The workflow:
+
+```text
+DecodedTrack
+    ↓
+Audio window iterator
+    ↓
+Basic Pitch TFLite inference
+    ↓
+Window activations
+    ↓
+Overlap removal/alignment
+    ↓
+Note postprocessing
+    ↓
+Sorted NoteEvent[]
+```
+
+### Constraints
+
+- No full-song inference tensor allocation.
+- Reuse the loaded model.
+- Avoid repeated model initialization.
+- Use bounded windows.
+- Avoid unnecessary PCM copies.
+- Do not execute substantial preprocessing inside a render callback.
+- Keep the UI responsive.
+- Support cancellation between model windows.
+- Prevent stale results from a previous import overwriting a newer track.
+
+Investigate whether the selected native API actually schedules asynchronous inference off the UI thread.
+
+Do not assume that a Promise automatically makes CPU-intensive JavaScript preprocessing nonblocking.
+
+If required, move expensive processing to an appropriate native/background execution path.
+
+### Lifecycle
+
+Handle:
+
+- cold model load;
+- repeated analyses;
+- import cancellation;
+- app backgrounding;
+- track replacement;
+- native inference error;
+- memory pressure;
+- model disposal.
+
+The exact behavior of cancellation during an in-progress native inference call must be documented.
+
+Do not claim immediate cancellation if the native runtime cannot interrupt the current model invocation.
+
+---
+
+## Milestone 2.9 — Integrate Basic Pitch into AudioEngine
+
+Inspect:
+
+```text
+src/audio-v3/audio-engine.ts
+src/analysis/analysis-engine.ts
+```
+
+Current:
+
+```text
+import
+→ decode
+→ DSP
+→ notes = []
+→ VisualScore
+```
+
+Target:
+
+```text
+import
+→ decode
+→ DSP
+→ Basic Pitch
+→ note events
+→ melody extraction
+→ phrase segmentation
+→ VisualScore
+```
+
+### Recommended architecture
+
+Do not put direct Fast TFLite calls inside `AudioEngine`.
+
+Create:
+
+```text
+src/analysis/transcription-provider.ts
+```
+
+with a provider abstraction.
+
+Example:
+
+```ts
+interface TranscriptionProvider {
+  readonly id: string;
+  readonly version: string;
+
+  transcribe(
+    pcm: Float32Array,
+    sampleRate: number,
+    signal?: AbortSignal
+  ): Promise<NoteEvent[]>;
+}
+```
+
+Implement:
+
+```text
+BasicPitchTFLiteProvider
+NoTranscriptionProvider
+```
+
+Preserve the current deterministic fallback.
+
+### Integration flow
+
+1. Inspect and hash track.
+2. Check the appropriate versioned cache.
+3. Decode audio if cache is missing.
+4. Calculate existing DSP features.
+5. Load Basic Pitch model.
+6. Run transcription.
+7. Validate and sort notes.
+8. Generate a consistent `MusicAnalysis`.
+9. Extract melody/phrases.
+10. Generate `VisualScore`.
+11. Cache the result.
+12. Enable playback.
+
+### Error handling
+
+If Basic Pitch fails:
+
+- do not crash;
+- record a structured warning;
+- retain the valid DSP analysis;
+- produce a fallback VisualScore;
+- explain that note transcription is unavailable.
+
+Do not fabricate note events to make the screen appear more reactive.
+
+---
+
+## Milestone 2.10 — Handle caching and provenance correctly
+
+This is an important repository-specific issue.
+
+The existing cache can remember a manually imported desktop reference for a particular track hash.
+
+Do not let the application silently load that reference and then report that Android ML succeeded.
+
+Separate provenance clearly.
+
+Examples:
+
+```text
+transcription = basic-pitch-0.4.0-tflite-android
+```
+
+versus:
+
+```text
+transcription = basic-pitch-0.4.0-onnx-desktop
+```
+
+### Required cache keys
+
+Cache analysis using:
+
+```text
+track SHA-256
+analysis schema version
+transcription model version
+transcription postprocessing version
+alignment version
+rhythm provider version
+harmony version
+```
+
+Cache VisualScore separately by composer version.
+
+### Rules
+
+- Normal import should prefer valid on-device analysis.
+- Desktop reference analysis must remain explicitly distinguishable.
+- A cache entry without notes must not masquerade as ML transcription.
+- Changing only the visual composer should not rerun ML.
+- Changing model weights should invalidate incompatible transcription results.
+- Invalid cache entries should be rejected safely.
+- Reimporting an unchanged track should reuse valid cached on-device analysis.
+
+Add a DEV-only **force reanalyze** option.
+
+That option must bypass cached note results and the remembered desktop reference.
+
+---
+
+## Milestone 2.11 — Keep the music player minimal
+
+Preserve the existing interface:
+
+```text
+full-screen painting
++
+small bottom music player
+```
+
+The player must remain auto-hiding.
+
+During analysis, display a minimal progress overlay.
+
+For example:
+
+```text
+Crystallineye
+
+Understanding your music…
+
+Analyzing notes
+████████░░░░ 68%
+```
+
+Do not fake stage progress.
+
+Use actual processed-window counts for transcription progress.
+
+### Error states
+
+Show actionable messages.
+
+For example:
+
+```text
+Note analysis could not finish.
+You can still play this song using basic visualization.
+```
+
+Do not expose stack traces or raw native errors to normal users.
+
+### Optional low-memory behavior
+
+If mobile inference exceeds the device's safe resource budget, fall back to DSP.
+
+Avoid crashing or exhausting memory.
+
+---
+
+## Milestone 2.12 — Android physical-device validation
+
+An emulator test alone is insufficient.
+
+Test on at least one real Android device.
+
+Prefer a midrange device representative of the intended users.
+
+Record:
+
+```text
+device model
+Android version
+RAM
+CPU/GPU
+app build
+model version
+audio hash
+```
+
+### Required tests
+
+**Cold import**
+
+No cache exists.
+
+The app:
+
+```text
+imports
+decodes
+runs ML
+produces notes
+renders painting
+```
+
+**Cached import**
+
+Reopen the same song.
+
+The app loads the previous analysis without rerunning Basic Pitch.
+
+**Offline test**
+
+Enable airplane mode and clear cached analysis.
+
+Verify the bundled model can still perform transcription.
+
+**Cancellation**
+
+Cancel a long-running transcription.
+
+Verify no stale result appears later.
+
+**Track replacement**
+
+Import a new song while a previous analysis has been canceled or completed.
+
+Verify no cross-track contamination.
+
+**Pause and seek**
+
+Verify existing playback-time synchronization remains correct.
+
+**Low-memory test**
+
+Use a track near the current six-minute limit.
+
+Monitor allocations and termination behavior.
+
+**Backgrounding**
+
+Move the app to background during analysis.
+
+Verify behavior follows the documented lifecycle policy.
+
+### Performance metrics
+
+Measure:
+
+```text
+model load time
+inference time
+total analysis time
+per-window latency
+peak memory
+CPU utilization
+thermal behavior
+UI responsiveness
+```
+
+Use a full release-like build for meaningful performance measurements, not only a debug build.
+
+Initial goal:
+
+Analyze a typical four-minute song within a reasonable, measured duration.
+
+Do not promise a fixed number of seconds without device benchmarks.
+
+---
+
+# 5. Validation of the two milestones together
+
+After Part 2 is complete, repeat the Part 1 comparison.
+
+Use the same True Colors source.
+
+## Configuration A
+
+```text
+Desktop Basic Pitch reference
++
+new melody-directed composer
+```
+
+## Configuration B
+
+```text
+Android Basic Pitch TFLite
++
+same melody-directed composer
+```
+
+All other analysis inputs should be held fixed during the controlled transcription comparison.
+
+This isolates whether the Android transcription produces comparable painting instructions.
+
+### Compare
+
+- note counts;
+- note onset timestamps;
+- note durations;
+- note pitches;
+- selected melodic contour;
+- phrase boundaries;
+- gesture start/end;
+- brush trajectories;
+- color events;
+- rendered frames.
+
+The objective is not pixel-perfect equality between different numerical backends.
+
+The objective is musically and visually equivalent behavior within justified tolerances.
+
+---
+
+# 6. Success metrics
+
+## Part 1
+
+| Measurement | Target |
+|---|---|
+| Main trajectory controlled by fixed sine/cosine loop | No |
+| Note-derived trajectory | Yes |
+| Phrase onset controls gesture | Yes |
+| Note duration controls gesture timing | Yes |
+| Unexplained brush teleporting | Zero |
+| Deterministic seeking | Pass |
+| Distinct visual behavior for ascending versus descending melody | Pass |
+| Rests represented | Pass |
+| Repeated artificial loops | No dominant repeating pattern |
+| User evaluation | Must be requested and documented |
+
+## Part 2
+
+| Measurement | Target |
+|---|---|
+| Basic Pitch model loads on Android | Pass |
+| Offline inference works | Pass |
+| Input/output tensor contracts validated | Pass |
+| Python TFLite parity fixtures | Pass |
+| Whole-song transcription | Pass |
+| Note timestamps bounded and valid | Pass |
+| Cache reuse | Pass |
+| Cancellation safety | Pass |
+| Real Android testing | Required |
+| Existing DSP fallback | Preserved |
+
+Treat all numeric timing/performance thresholds as acceptance targets until real tests establish achievable values.
+
+---
+
+# 7. Multi-agent execution model
+
+Use specialist agents only where the environment supports parallel agents safely.
+
+Suggested ownership:
+
+### Lead / Integrator
+
+Owns:
+
+- contracts;
+- versioning;
+- integration;
+- milestones;
+- acceptance gates;
+- final report.
+
+### Visual Composition Agent
+
+Owns:
+
+```text
+src/visual-score/
+src/analysis/phrase-*
+```
+
+Responsible for Part 1 musical trajectories.
+
+### Painter / Rendering Agent
+
+Owns:
+
+```text
+src/paint/
+```
+
+Responsible for applying gestures and preserving smooth Skia rendering.
+
+### ML Research Agent
+
+Owns:
+
+```text
+research/analysis/
+research/model-parity/
+```
+
+Responsible for Python ONNX/TFLite comparisons and timestamp correctness.
+
+### Mobile ML Agent
+
+Owns:
+
+```text
+src/ml/
+```
+
+Responsible for the TFLite runtime and Android inference.
+
+### Audio Integration Agent
+
+Owns:
+
+```text
+src/audio-v3/
+src/analysis/transcription-provider.ts
+```
+
+Responsible for decoding, lifecycle, caching integration, and failure recovery.
+
+### QA Agent
+
+Owns:
+
+- fixtures;
+- integration tests;
+- reproducible traces;
+- benchmark evidence;
+- final regression report.
+
+Do not have multiple agents simultaneously rewrite `MusicAnalysis` or `VisualScore` schemas.
+
+The lead agent must approve interfaces before integration.
+
+---
+
+# 8. Detailed execution order
+
+Follow this sequence.
+
+| Step | Task | Exit gate |
+|---|---|---|
+| 0 | Audit and freeze baseline | Reproducible starting state |
+| 1 | Verify True Colors reference | Matching source hash/valid JSON |
+| 2 | Introduce phrase segmentation | Phrase tests pass |
+| 3 | Implement melody trajectory planner | No dominant circular loop |
+| 4 | Implement phrase-aware canvas layout | Coherent canvas coverage |
+| 5 | Adapt VisualScore composer | Deterministic musical gestures |
+| 6 | Adapt Skia painting as necessary | Smooth stroke rendering |
+| 7 | Compare old/new painter | Part 1 evaluation complete |
+| 8 | Verify Fast TFLite compatibility | Android native load passes |
+| 9 | Bundle official Basic Pitch model | Verified model provenance |
+| 10 | Implement PCM windowing | Python preprocessing parity |
+| 11 | Implement Android inference | Raw tensor parity |
+| 12 | Implement model postprocessing | Note-event parity |
+| 13 | Validate long-track timing | No unexplained systematic drift |
+| 14 | Integrate transcription provider | Real imported songs produce notes |
+| 15 | Implement cache/provenance separation | No desktop/on-device confusion |
+| 16 | Test cancellation and failure paths | Robust lifecycle |
+| 17 | Benchmark on physical Android | Recorded performance |
+| 18 | Compare desktop vs Android painting | Musical/visual parity |
+| 19 | Final UX and regression testing | User acceptance gate |
+
+Do not skip the Part 1 acceptance checkpoint between steps 7 and 8.
+
+---
+
+# 9. Repository structure
+
+Suggested additions:
+
+```text
+src/
+├── analysis/
+│   ├── phrase-segmenter.ts
+│   ├── melodic-contour.ts
+│   ├── phrase-types.ts
+│   └── transcription-provider.ts
+│
+├── ml/
+│   ├── types.ts
+│   ├── model-registry.ts
+│   └── basic-pitch/
+│       ├── model-loader.ts
+│       ├── model-adapter.ts
+│       ├── model-metadata.ts
+│       ├── windowing.ts
+│       ├── preprocessing.ts
+│       ├── inference.ts
+│       ├── alignment.ts
+│       ├── postprocessing.ts
+│       ├── note-decoder.ts
+│       └── transcriber.ts
+│
+├── visual-score/
+│   ├── phrase-layout.ts
+│   ├── trajectory-planner.ts
+│   └── gesture-generator.ts
+│
+assets/
+└── models/
+    └── basic-pitch/
+        └── [verified official model]
+
+research/
+└── model-parity/
+    ├── python_tflite_reference.py
+    ├── compare_outputs.py
+    └── fixtures/
+
+tests/
+├── phrase-segmentation.test.ts
+├── trajectory-planner.test.ts
+├── basic-pitch-windowing.test.ts
+├── basic-pitch-alignment.test.ts
+├── basic-pitch-postprocessing.test.ts
+├── transcription-provider.test.ts
+└── ml-cache.test.ts
+
+docs/
+├── V3_2_REFERENCE_BASELINE.md
+├── V3_2_MELODY_TRAJECTORY.md
+├── BASIC_PITCH_MODEL_PROVENANCE.md
+├── BASIC_PITCH_ANDROID_INTEGRATION.md
+├── BASIC_PITCH_PARITY.md
+├── V3_2_ANDROID_PERFORMANCE.md
+└── V3_2_FINAL_VALIDATION.md
+```
+
+Adapt filenames to the existing project conventions.
+
+Avoid creating unnecessary abstractions merely to match this suggested tree.
+
+---
+
+# 10. Required automated checks
+
+At the end of every meaningful milestone, run relevant checks.
+
+At final integration:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run benchmark:v3
+npm run validate:paint
+npm run validate:reference
+npx expo-doctor@latest
+npx expo export --platform android
+```
+
+Use the existing Windows Android build script where appropriate:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1
+```
+
+Also run new Basic Pitch parity tests and actual Android runtime tests.
+
+Do not claim Android model inference works merely because an APK compiled.
+
+---
+
+# 11. Full acceptance scenario
+
+The final user experience should be:
+
+```text
+Open Crystallineye
+        ↓
+Import True Colors
+        ↓
+Decode locally
+        ↓
+Run Basic Pitch on Android
+        ↓
+Extract note events
+        ↓
+Find melodic phrases
+        ↓
+Combine notes with DSP/rhythm/harmony
+        ↓
+Generate VisualScore
+        ↓
+Play song
+        ↓
+The painting follows musical phrases
+        ↓
+Pitch changes influence movement/color
+        ↓
+Note durations influence brush motion
+        ↓
+Beats influence pressure
+        ↓
+Harmony influences pigment
+        ↓
+Rests lift the brush
+        ↓
+Song sections reorganize the painting
+        ↓
+Playback stays synchronized
+```
+
+Everything must work offline without manually importing Python-generated JSON.
+
+The old DSP-only workflow must remain available as a fallback.
+
+---
+
+# 12. Explicit failure conditions
+
+Do not declare success if:
+
+- the brush still primarily follows a sinusoidal/circular trajectory;
+- Basic Pitch is only running in Python;
+- model outputs are fabricated or random;
+- the Android model loads but its outputs are never used;
+- note timestamps drift substantially;
+- imported desktop analysis is mistaken for Android inference;
+- the same song produces unexplained visual discontinuities;
+- the interface freezes during analysis;
+- native inference crashes on the test device;
+- the app loses pause/seek synchronization;
+- copyrighted reference audio is accidentally committed;
+- tests fail and the report conceals them.
+
+Report partial completion if necessary.
+
+---
+
+# 13. Final deliverables
+
+Produce:
+
+1. A functioning melody-directed painting system.
+2. Official Basic Pitch TFLite inference on Android.
+3. Automatic on-device note transcription for imported songs.
+4. A deterministic `MusicAnalysis → VisualScore` pipeline.
+5. Python-to-Android model parity evidence.
+6. A corrected, tested audio-to-visual timestamp mapping.
+7. Versioned analysis caching.
+8. A stable Android development build.
+9. Automated tests and benchmark results.
+10. Visual A/B evidence.
+11. Updated project documentation.
+12. A clear report of remaining limitations.
+
+Do not begin Beat This! mobile integration, All-In-One mobile integration, or source separation as part of this two-part milestone.
+
+Those remain future work unless a specific blocker requires reconsideration and the lead documents the decision.
+
+---
+
+# 14. Important research references
+
+Read the current official documentation, with special attention to implementation versions:
+
+**Spotify Basic Pitch**
+
+https://github.com/spotify/basic-pitch
+
+https://github.com/spotify/basic-pitch/blob/main/basic_pitch/inference.py
+
+https://github.com/spotify/basic-pitch/blob/main/basic_pitch/note_creation.py
+
+**Basic Pitch long-form timing concern**
+
+https://github.com/spotify/basic-pitch/issues/190
+
+**React Native Fast TFLite**
+
+https://github.com/margelo/react-native-fast-tflite
+
+https://github.com/margelo/react-native-fast-tflite/blob/main/MIGRATION_V2_TO_V3.md
+
+**Expo native modules and development builds**
+
+https://docs.expo.dev/workflow/customizing/
+
+https://docs.expo.dev/develop/development-builds/use-development-builds/
+
+**Expo Metro customization**
+
+https://docs.expo.dev/guides/customizing-metro/
+
+These sources explain library behavior and implementation contracts. They do not establish that the entire stack has already been validated for this particular Crystallineye project.
+
+Run the compatibility and parity tests specified above.
+
+---
+
+# 15. Final instructions to Codex
+
+Begin with repository and reference-analysis inspection.
+
+Do not immediately install TFLite.
+
+First produce a baseline explaining precisely how the existing brush trajectory is generated.
+
+Then implement the new composition-driven trajectory and prove its behavior using the existing desktop MusicAnalysis.
+
+Once that passes, perform the Android TFLite feasibility spike.
+
+If the model loads, implement preprocessing, inference, timestamp alignment, and note postprocessing with Python parity checks.
+
+Only then integrate automatic transcription into normal track imports.
+
+After each milestone:
+
+- run relevant tests;
+- record results;
+- update `JOURNAL.md`;
+- document blockers;
+- preserve existing working behavior;
+- distinguish implementation from actual verification.
+
+Use specialist agents where they materially improve execution, but keep the lead agent responsible for architecture and integration.
+
+**Final principle: Musical understanding determines the painting. The painting should not invent a movement pattern and merely decorate it with musical information.**
+
+Begin the two-part implementation now.

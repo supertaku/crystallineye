@@ -30,7 +30,7 @@ async function main() {
       legacyNodesForSameLayers: Math.max(...mounted.map(item => item.legacyDrawableNodesForSameLayers)),
       heapDeltaBytes: process.memoryUsage().heapUsed - memoryBefore });
   }
-  const output = resolve('research/results/generated/v31-performance'); mkdirSync(output, { recursive: true });
+  const output = resolve('research/results/generated/v32-performance'); mkdirSync(output, { recursive: true });
   const report = { environment: `Node ${process.version}; ${process.platform}; desktop JS only`,
     limits: 'Not presented frames, native/GPU timing, process peak memory, thermal/battery cost or Android acceptance. Heap deltas include GC variation.', reports };
   writeFileSync(join(output, 'report.json'), JSON.stringify(report, null, 2));

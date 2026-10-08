@@ -7,8 +7,9 @@ import { ScorePlayer } from './score-player';
 import { StrokeLayer } from './StrokeLayer';
 import { DropLayer } from './DropLayer';
 import { WashLayer } from './WashLayer';
+import { TrajectoryOverlay } from './TrajectoryOverlay';
 
-export const PaintCanvas = memo(function PaintCanvas({ score, sceneIndex, songTime, reducedMotion }: { score: VisualScore; sceneIndex: number; songTime: SharedValue<number>; reducedMotion: boolean }) {
+export const PaintCanvas = memo(function PaintCanvas({ score, sceneIndex, songTime, reducedMotion, diagnosticTrajectory = false }: { score: VisualScore; sceneIndex: number; songTime: SharedValue<number>; reducedMotion: boolean; diagnosticTrajectory?: boolean }) {
   const { width, height } = useWindowDimensions();
   const player = useMemo(() => new ScorePlayer(score), [score]);
   const sections = useMemo(() => player.layersAt(sceneIndex), [player, sceneIndex]);
@@ -20,5 +21,6 @@ export const PaintCanvas = memo(function PaintCanvas({ score, sceneIndex, songTi
       <StrokeLayer strokes={section!.strokes} accents={score.accents} scene={section!.scene} time={songTime} width={width} height={height} reducedMotion={reducedMotion} simple={simple} />
       <DropLayer drops={section!.drops} scene={section!.scene} time={songTime} width={width} height={height} reducedMotion={reducedMotion} />
     </Group>)}
+    {__DEV__ && diagnosticTrajectory ? <TrajectoryOverlay key={`${score.version}-${score.analysisKey}`} score={score} songTime={songTime} width={width} height={height} /> : null}
   </Canvas>;
 });

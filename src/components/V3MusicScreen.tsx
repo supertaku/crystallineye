@@ -13,6 +13,9 @@ import { ClockTrace, DIAGNOSTIC_MODES, type DiagnosticMode } from '../audio-v3/c
 import { SyntheticClockSource } from '../audio-v3/synthetic-clock';
 import { VisualTimeGate } from '../audio-v3/visual-time-gate';
 import { createDiagnosticScore } from '../visual-score/diagnostics';
+import { composeVisualScore } from '../visual-score/composer';
+import type { PaintingComparison, PaintingComparisonMode } from '../visual-score/comparison-modes';
+import { createTrajectoryDiagnostics } from '../paint/trajectory-diagnostics';
 import type { AnalysisProgress as Progress } from '../analysis/analysis-schema';
 import { PaintCanvas } from '../paint/PaintCanvas';
 import { ScorePlayer } from '../paint/score-player';
@@ -44,6 +47,10 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
   const [scrubbing, setScrubbing] = useState(false);
   const [debug, setDebug] = useState(false);
   const [diagnosticMode, setDiagnosticMode] = useState<DiagnosticMode>('D');
+  const [paintingComparisons, setPaintingComparisons] = useState<PaintingComparison[] | null>(null);
+  const [paintingMode, setPaintingMode] = useState<PaintingComparisonMode>('C');
+  const [legacyTrajectory, setLegacyTrajectory] = useState(false);
+  const [trajectoryDebug, setTrajectoryDebug] = useState(false);
   const [recording, setRecording] = useState(false);
   const [traceSummary, setTraceSummary] = useState<ReturnType<ClockTrace['summary']> | null>(null);
   const [tracePath, setTracePath] = useState<string | null>(null);
@@ -62,8 +69,14 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
   const mode = DIAGNOSTIC_MODES.find((value) => value.mode === diagnosticMode)!;
   const synthetic = __DEV__ && mode.synthetic;
   const duration = track?.metadata.duration ?? 30;
-  const score = useMemo(() => __DEV__ && (diagnosticMode === 'A' || diagnosticMode === 'B') ? createDiagnosticScore(duration) : track?.score ?? null, [diagnosticMode, duration, track]);
+  const paintingComparison = __DEV__ ? paintingComparisons?.find((item) => item.mode === paintingMode) : undefined;
+  const activeAnalysis = paintingComparison?.analysis ?? track?.analysis;
+  const compositionScore = useMemo(() => paintingComparison?.score
+    ?? (__DEV__ && legacyTrajectory && track ? composeVisualScore(track.analysis, { trajectory: 'legacy' }) : track?.score ?? null), [paintingComparison, legacyTrajectory, track]);
+  const score = useMemo(() => __DEV__ && (diagnosticMode === 'A' || diagnosticMode === 'B') ? createDiagnosticScore(duration) : compositionScore, [diagnosticMode, duration, compositionScore]);
   const player = useMemo(() => score ? new ScorePlayer(score) : null, [score]);
+  const trajectoryIndex = useMemo(() => __DEV__ && debug && score ? createTrajectoryDiagnostics(score) : null, [debug, score]);
+  const trajectoryFrame = useMemo(() => trajectoryIndex?.diagnosticAt(position), [trajectoryIndex, position]);
   const debugFrame = useMemo(() => __DEV__ && debug ? player?.frameAt(position) : null, [debug, player, position]);
   const renderNodes = useMemo(() => __DEV__ && debug && score ? estimateRenderNodes(score, sceneIndex) : null, [debug, score, sceneIndex]);
   const eventTimes = useMemo(() => __DEV__ ? [...new Set([
@@ -73,7 +86,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
   ])].sort((a, b) => a - b) : [], [track, score]);
   const musicalDiagnostics = useMemo(() => {
     if (!__DEV__ || !debug || !track) return null;
-    const analysis = track.analysis;
+    const analysis = paintingComparison?.analysis ?? track.analysis;
     const dynamics = latestAt(analysis.dynamics, position, (event) => event.time);
     const beat = latestAt(analysis.rhythm.beats, position, (event) => event.time);
     const downbeat = latestAt(analysis.rhythm.downbeats, position, (event) => event.time);
@@ -88,7 +101,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
       `Chroma ${chroma?.values.map((value) => value.toFixed(2)).join(' ') ?? 'unavailable'}`,
       `Section ${section ? `${section.label} ${section.start.toFixed(2)}–${section.end.toFixed(2)}s` : 'unknown'}`,
     ].join('\n');
-  }, [debug, track, position]);
+  }, [debug, track, position, paintingComparison]);
   const busy = picking || !!progress;
   const overlay = usePlayerAutoHide(playing && !buffering, busy || !loaded || !!error || debug || screenReader || scrubbing);
 
@@ -172,6 +185,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
       const nextTransport = new AudioTransport(prepared.metadata.duration);
       transport.current = nextTransport; setNativeTransport(nextTransport);
       setDiagnosticMode('D'); trace.current.clear(); setTraceSummary(null); setTracePath(null); visualTimeGate.reset();
+      setPaintingComparisons(null); setPaintingMode('C'); setLegacyTrajectory(false); setTrajectoryDebug(false);
       setAudioGeneration((value) => value + 1);
       songTime.set(0); setPosition(0); setSceneIndex(0); setLoaded(false); setTrack(prepared);
     } catch (cause) { if (mounted.current && !controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); }
@@ -200,9 +214,40 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
         const nextScore = mode.simple ? createDiagnosticScore(duration) : prepared.score;
         const time = songTime.value, index = new ScorePlayer(nextScore).sceneIndex(time);
         visualTimeGate.offer(time, index, false); setSceneIndex(index); setTrack(prepared);
+        setPaintingComparisons(null); setPaintingMode('C'); setLegacyTrajectory(false);
       }
     } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { if (mounted.current) setPicking(false); }
+  };
+  const preparePaintingComparisons = async () => {
+    if (!__DEV__ || !track || busy || operation.current) return;
+    const controller = new AbortController(); operation.current = controller;
+    try {
+      pause(); setError(null); setProgress({ stage: 'decode', stageProgress: 0, overallProgress: 0 });
+      const comparisonTime = transport.current?.currentTime() ?? position;
+      const prepared = await engine.comparePaintings(track, (value) => {
+        if (mounted.current && !controller.signal.aborted) setProgress(value);
+      }, controller.signal);
+      if (!mounted.current || controller.signal.aborted) return;
+      const index = new ScorePlayer(prepared.find((item) => item.mode === 'C')!.score).sceneIndex(comparisonTime);
+      visualTimeGate.offer(comparisonTime, index, false); setSceneIndex(index); setPosition(comparisonTime);
+      setPaintingComparisons(prepared); setPaintingMode('C'); setLegacyTrajectory(false);
+    } catch (cause) {
+      if (mounted.current && !controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (operation.current === controller) operation.current = null;
+      if (mounted.current) { setProgress(null); setCancelling(false); }
+    }
+  };
+  const selectPaintingComparison = (nextMode: PaintingComparisonMode) => {
+    if (!__DEV__ || busy || !paintingComparisons) return;
+    try {
+      pause();
+      const time = transport.current?.currentTime() ?? position;
+      const selected = paintingComparisons.find((item) => item.mode === nextMode)!;
+      const index = new ScorePlayer(selected.score).sceneIndex(time);
+      visualTimeGate.offer(time, index, false); setSceneIndex(index); setPosition(time); setPaintingMode(nextMode);
+    } catch (cause) { reportError(cause instanceof Error ? cause.message : String(cause)); }
   };
   const toggleDebug = () => {
     const now = performance.now();
@@ -231,7 +276,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
     try {
       const file = new File(Paths.document, `v3-clock-${Date.now()}.json`);
       file.write(JSON.stringify({ version: 'v3-clock-trace-1', capturedAt: new Date().toISOString(), mode: diagnosticMode,
-        audioHash: track?.analysis.track.hash ?? null, composerVersion: score?.version ?? null,
+        audioHash: track?.analysis.track.hash ?? null, composerVersion: score?.version ?? null, paintingMode: paintingComparison?.mode ?? null,
         evidence: 'JavaScript observations of native or synthetic position and the value supplied to paint; GPU presentation and audible alignment are not measured.',
         summary: trace.current.summary(), samples: trace.current.snapshot() }, null, 2));
       setTracePath(file.uri);
@@ -241,7 +286,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
   return <View style={styles.root}>
     <StatusBar style="light" hidden={!!score && playing && !busy && !error && !buffering} />
     {score ? <VisualizationBoundary key={`${score.trackHash}-${diagnosticMode}`} fallback={<View style={StyleSheet.absoluteFill} />} onFailure={reportError}>
-      <PaintCanvas score={score} sceneIndex={sceneIndex} songTime={songTime} reducedMotion={reducedMotion} />
+      <PaintCanvas score={score} sceneIndex={sceneIndex} songTime={songTime} reducedMotion={reducedMotion} diagnosticTrajectory={__DEV__ && trajectoryDebug} />
     </VisualizationBoundary> : null}
     <Pressable style={StyleSheet.absoluteFill} onPress={overlay.toggle} accessible={!!score && playing && !screenReader} accessibilityRole="button" accessibilityLabel={overlay.visible ? 'Hide music controls' : 'Show music controls'} />
     {track && nativeTransport && !synthetic ? <NativeAudio key={audioGeneration} uri={track.uri} transport={nativeTransport}
@@ -261,9 +306,22 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
     {__DEV__ ? <Pressable style={styles.hotspot} onPress={toggleDebug} accessibilityRole="button" accessibilityLabel="Triple tap for developer comparison" /> : null}
     {__DEV__ && debug ? <SafeAreaView style={styles.debug}><ScrollView contentContainerStyle={styles.debugContent}>
       <Text style={styles.devText}>DEV · Score-Driven V3</Text>
+      <Text style={styles.devText}>Clock experiments (independent of painting A–D)</Text>
       {DIAGNOSTIC_MODES.map((option) => <Pressable key={option.mode} style={styles.devButton} onPress={() => selectDiagnosticMode(option.mode)} disabled={busy || (option.mode !== 'A' && !track)} accessibilityRole="button" accessibilityState={{ selected: diagnosticMode === option.mode }}>
         <Text style={styles.devText}>{diagnosticMode === option.mode ? '● ' : ''}{option.label}</Text>
       </Pressable>)}
+      <Text style={styles.devText}>Painting comparison · same recording and native clock</Text>
+      <Pressable style={styles.devButton} onPress={() => void preparePaintingComparisons()} disabled={busy || !track?.analysis.notes.length} accessibilityRole="button"><Text style={styles.devText}>Prepare painting A–D from matching reference and measured DSP</Text></Pressable>
+      {paintingComparisons?.map((option) => <Pressable key={option.mode} style={styles.devButton} onPress={() => selectPaintingComparison(option.mode)} disabled={busy} accessibilityRole="button" accessibilityState={{ selected: paintingMode === option.mode }}>
+        <Text style={styles.devText}>{paintingMode === option.mode ? '● ' : ''}{option.label}</Text>
+      </Pressable>)}
+      {!paintingComparisons && track ? <Pressable style={styles.devButton} disabled={busy} onPress={() => {
+        try { pause(); setLegacyTrajectory((value) => !value); } catch (cause) { reportError(String(cause)); }
+      }} accessibilityRole="button"><Text style={styles.devText}>{legacyTrajectory ? 'Use V3.2 phrase trajectory' : 'Preview retained V3.1 trajectory on current analysis'}</Text></Pressable> : null}
+      <Text style={styles.devText}>{paintingComparison ? `${paintingComparison.label}\n${paintingComparison.analysis.modelVersions.transcription ?? 'No note transcription'} · ${paintingComparison.analysis.notes.length} notes`
+        : 'Load an exact-source research JSON to prepare A–D. Ordinary imports currently use DSP without notes.'}</Text>
+      <Pressable style={styles.devButton} onPress={() => setTrajectoryDebug((value) => !value)} accessibilityRole="button" accessibilityState={{ selected: trajectoryDebug }}><Text style={styles.devText}>{trajectoryDebug ? 'Hide trajectory geometry' : 'Show trajectory geometry, controls and brush tip'}</Text></Pressable>
+      {trajectoryFrame ? <Text style={styles.devText}>{`Phrase ${trajectoryFrame.activePhrase?.id ?? 'rest'} · ${trajectoryFrame.activePhrase?.direction ?? '—'}\n${trajectoryFrame.activeNote ? `MIDI ${trajectoryFrame.activeNote.midi} · ${trajectoryFrame.activeNote.start.toFixed(3)}–${trajectoryFrame.activeNote.end.toFixed(3)}s · interval ${trajectoryFrame.activeNote.interval}` : 'No selected note active'}\nGesture ${trajectoryFrame.activeGesture?.id ?? 'brush lifted'}\n${trajectoryFrame.brush ? `x ${trajectoryFrame.brush.position.x.toFixed(3)} y ${trajectoryFrame.brush.position.y.toFixed(3)} · velocity (${trajectoryFrame.brush.velocity.x.toFixed(3)}, ${trajectoryFrame.brush.velocity.y.toFixed(3)}) · pressure ${trajectoryFrame.brush.pressure.toFixed(3)}` : 'No paint contact'}\n${trajectoryFrame.movementExplanation}`}</Text> : null}
       <Pressable style={styles.devButton} onPress={() => { setRecording((value) => !value); }} accessibilityRole="button"><Text style={styles.devText}>{recording ? 'Stop clock trace' : 'Record clock trace'}</Text></Pressable>
       <Pressable style={styles.devButton} onPress={() => { trace.current.clear(); setTraceSummary(null); setTracePath(null); }} accessibilityRole="button"><Text style={styles.devText}>Clear trace</Text></Pressable>
       <Pressable style={styles.devButton} onPress={saveTrace} accessibilityRole="button"><Text style={styles.devText}>Save retained clock trace JSON</Text></Pressable>
@@ -280,7 +338,7 @@ export function V3MusicScreen({ onLegacy }: { onLegacy?: () => void }) {
       <Pressable style={styles.devButton} onPress={onLegacy} disabled={busy} accessibilityRole="button"><Text style={styles.devText}>Visualizer V2</Text></Pressable>
       <Pressable style={styles.devButton} onPress={() => void loadReference()} disabled={!track || busy} accessibilityRole="button"><Text style={styles.devText}>Load research MusicAnalysis JSON</Text></Pressable>
       <Pressable style={styles.devButton} onPress={() => setDebug(false)} accessibilityRole="button"><Text style={styles.devText}>Close</Text></Pressable>
-      {track ? <Text style={styles.devText}>{`${track.analysis.quality} · ${track.cacheHit ? 'cached' : 'analyzed'}\n${track.analysis.track.hash.slice(0, 16)}\n${track.analysis.notes.length} notes · ${track.analysis.rhythm.beats.length} beats\n${track.score.strokes.length} strokes · ${track.score.scenes.length} scenes\n${track.analysis.warnings.join('\n')}`}</Text> : null}
+      {track && activeAnalysis ? <Text style={styles.devText}>{`${activeAnalysis.quality} · ${track.cacheHit ? 'cached' : 'analyzed'}\n${activeAnalysis.track.hash.slice(0, 16)}\n${activeAnalysis.notes.length} notes · ${activeAnalysis.rhythm.beats.length} beats\n${score?.strokes.length ?? 0} strokes · ${score?.scenes.length ?? 0} scenes\n${activeAnalysis.warnings.join('\n')}`}</Text> : null}
     </ScrollView></SafeAreaView> : null}
   </View>;
 }

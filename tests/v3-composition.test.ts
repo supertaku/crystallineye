@@ -6,9 +6,9 @@ import { composePaletteTimeline, paletteAt } from '../src/visual-score/palette';
 import { createDiagnosticScore } from '../src/visual-score/diagnostics';
 import { brushStateAt } from '../src/paint/scene-runtime';
 
-test('downbeats and section changes preserve the previous brush endpoint and pressure', async () => {
+test('retained V3.1 downbeats and section changes preserve the previous brush endpoint and pressure', async () => {
   const { analysis } = await createComposition(FIXTURE_STYLES[0]!);
-  const score = composeVisualScore(analysis);
+  const score = composeVisualScore(analysis, { trajectory: 'legacy' });
   assert.ok(score.strokes.length > 5);
   for (let index = 1; index < score.strokes.length; index++) {
     const before = score.strokes[index - 1]!.points.at(-1)!, after = score.strokes[index]!.points[0]!;
@@ -19,7 +19,7 @@ test('downbeats and section changes preserve the previous brush endpoint and pre
     assert.ok([point.x, point.y, point.time, point.width, point.opacity].every(Number.isFinite));
     assert.ok(point.x >= .13 && point.x <= .87 && point.y >= .3 && point.y <= .7);
   }
-  assert.deepEqual(composeVisualScore(analysis), score);
+  assert.deepEqual(composeVisualScore(analysis, { trajectory: 'legacy' }), score);
 });
 
 test('note lengths and rests determine brush contact, with no drawing through silence', async () => {

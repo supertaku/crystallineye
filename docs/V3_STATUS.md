@@ -1,5 +1,11 @@
 # V3 status — 2026-10-08
 
+## V3.2 Part 1 update
+
+The default composer is now `paint-composer-3.2`, with musical phrase interpretation, deterministic occupancy-aware placement, nonlinear note intervals, exact note/rest timing and precomputed DEV trajectory diagnostics. The old `paint-composer-3.1` trajectory and V2 remain selectable. Musical analysis stays `analysis-v3.1`; cache reuse rebuilds only the painting when the composer changes. Painting A–D compares genuine DSP, exact desktop reference, new phrase geometry and a note-only ablation while retaining the native clock.
+
+[V3.2 validation](V3_2_VALIDATION.md), [reference comparison](V3_2_REFERENCE_BASELINE.md), [trajectory rules](V3_2_MELODY_TRAJECTORY.md) and [performance](V3_2_ANDROID_PERFORMANCE.md) are the current evidence. The sections below preserve earlier V3/V3.1 results and blockers. The journal now records that the user copied an APK to a phone; current physical playback/performance and artistic acceptance still require evidence. Part 2 Basic Pitch Android integration has not started because the user's V3.2 plan explicitly requires accepted Part 1 evaluation first. Ordinary import still produces empty notes with measured DSP fallback.
+
 ## V3.1 remediation
 
 Remediation work is on `codex/v3-music-alignment-remediation`, starting from actual clean commit `e498f9941ba615c9b7b597baf06a4f845eb565aa`. Proven fixes cover bar-origin jumps, pressure/path joins, unused accents, rapid-seek stale clock acknowledgment, sustained-note truncation and harmonic timing. Real Basic Pitch, both Beat This checkpoints and All-In-One-Infer completed locally on the exact True Colors MP3; complete reference JSON remains local/ignored.
