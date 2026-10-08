@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "fixtures": "tsx scripts/generate-fixtures.ts",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "validate:shader": "tsx scripts/validate-shader.ts"
   },
   "dependencies": {
     "@react-native-community/slider": "5.2.0",

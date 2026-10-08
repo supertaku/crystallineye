@@ -1,60 +1,44 @@
-# Music in Color — functional MVP
+# Crystallineye — music in motion
 
-A single-screen Android-first Expo app: import a local song, play/pause it, seek or restart, and analyze actual playback waveform samples to drive a smooth full-screen Skia gradient. Audio and analysis stay on the device. No ML, accounts, playlists, persistence, or cloud services are implemented.
+An Android-first, offline music visualizer for Expo Go. Import a local song and its actual playback samples drive a full-screen Skia ink/smoke field: rhythm → expansion, tempo → flow speed, energy → pigment, spectrum → texture, onsets → disturbance. No ML, cloud services, fake notes, or streaming integrations.
 
-**Implementation is ready for Android feasibility testing; physical-device proof is still pending.** Current Expo Go Android sampling supplies 8-bit mono waveform snapshots without the capture sample rate. Consequently this MVP computes real RMS, FFT, normalized spectral brightness, spectral distribution, flux and onsets, but deliberately reports Hz centroid and the 20–250/250–2000/2000–8000 Hz bands as unavailable on Android. The Hz algorithms are implemented and tested with known-rate signals. See [known limitations](docs/KNOWN_LIMITATIONS.md).
+**Software checks pass; physical Android playback, visual responsiveness, GPU performance, and genre tuning remain pending.** Expo Go Android supplies uncalibrated waveform snapshots. Relative spectrum regions are used honestly; sample rate, Hz bands, pitch classes and notes are never invented.
 
-## Install and run
+## Run
 
-Use Node.js 22.20+ and an Android phone with an **Expo Go build supporting SDK 57**. Expo Go's SDK must match the project. Get a matching version from [Expo Go downloads](https://expo.dev/go); store releases can lag SDK releases. [Expo's version-mismatch guide](https://docs.expo.dev/troubleshooting/expo-go-version-mismatch/) explains this requirement.
+Use Node 22.20+ and Expo Go supporting **SDK 57**. The native dependency versions remain pinned, including Skia 2.6.2; no native dependencies were added. See [Expo Go downloads](https://expo.dev/go) for a matching build.
 
 ```sh
 npm install
 npm start
 ```
 
-Connect the computer and phone to the same network. Scan the QR code using Expo Go. If needed, allow Node through the computer's firewall. No native build or custom module is required. Keep the terminal running while loading the development bundle.
-
-Expo recommends signing into the CLI (`npx expo login`) and Expo Go with the same Expo account; current Expo Go releases can require this for development loading. This is development tooling, not an account feature in Music in Color. See [Expo's loading policy](https://expo.dev/changelog/expo-go-57-login).
-
-For a connected Android emulator/device with ADB installed:
-
-```sh
-npm run android
-```
-
-To start Metro without fetching network metadata, while still serving the bundle over the local network:
-
-```sh
-npm start -- --offline
-```
-
-The core playback/DSP has no network calls. Expo Go must first obtain the development bundle; cold-launching the development app entirely offline is not a shipped standalone-app guarantee.
+Scan the LAN QR code on your phone. `npm start -- --offline` skips development metadata requests. Audio and analysis work locally after Expo Go obtains the bundle; this does not make the development bundle a standalone offline distribution.
 
 ## Use
 
-1. Tap **Import Music** and select a local MP3, M4A/AAC, WAV, FLAC or OGG file.
-2. Wait for **Ready to play**, then tap **Play**.
-3. On Android, read the playback-sampling permission explanation and choose **Continue** before the system audio permission prompt.
-4. The screen follows the real samples. **Pause** freezes the visual state. Resume with **Play**.
-5. Drag the progress slider to seek, use **+10 sec**, or tap **Restart**. Seeking resets buffering, rate estimation, normalization and transient history before analysis warms up again.
-6. **Import another song** replaces the current session's track. Imports are copied to the app cache; restart persistence is intentionally absent.
+1. Import music through the system picker, then tap Play. Android sampling permission is explained before requesting it; playback also works without analysis permission.
+2. The canvas fills the viewport. The bottom overlay contains a one-line title, Replace, seek slider, time/duration and play/pause.
+3. During playback, controls fade after **2.8 seconds** without interaction. Tap the hidden field to show them; tap the visible field outside controls to hide them immediately.
+4. Pausing freezes visual time and beat progression and keeps controls visible. Scrubbing, loading, errors and screen-reader use also keep them visible.
+5. Seek resets all rhythm history and transient continuity while retaining the visible palette. Tempo warms up again. Replace selects another local file; cancelling leaves the previous track paused.
 
-Android's `RECORD_AUDIO` permission is needed for playback sampling. The app never starts a microphone recorder and uploads nothing. If permission is denied, music can still play with the current static background. Tap **Allow audio analysis** to retry. Permanently denied permission leads to **Open Settings**. File access uses the system picker, without broad storage permission. [Expo Audio](https://docs.expo.dev/versions/latest/sdk/audio/) documents the sampling permission.
+Tempo stays unknown for at least eight seconds of useful feature history. Rolling voting normally takes roughly nine seconds to lock on strong synthetic rhythms. Weak/nonperiodic content can remain unknown; onset pulses provide an immediate measured fallback. Real Android snapshots can miss short events, and native normalization can obscure original recording loudness.
 
-Unsupported or corrupt files show an actionable error. If sampling fails or stops delivering callbacks, playback remains available and the UI reports the missing analysis. The app pauses when it leaves the foreground.
+## Developer validation
 
-## Diagnostics and device validation
+Triple tap the invisible **top-right 52 dp hotspot** (each tap within 650 ms) to open/close diagnostics in development builds. Close also restores real playback inputs. Normal production UI has no diagnostics or synthetic signal controls.
 
-Tap **DEV** in a development build to inspect actual callback count, PCM frame count, packet length, raw/adapted timestamp, RMS, normalized energy, centroid availability, spectrum/band ratios, flux, onset, sample-rate confidence, DSP duration and UI callback FPS. No sample values are fabricated.
+Diagnostics include raw onset, combined novelty, energy/brightness, calibrated-band availability or relative spectrum thirds, callback cadence/packet size, tempo/confidence, beat phase/pulse, DSP mean/p95, event/interpreter timing and UI frame callback FPS. FPS counts callbacks, not GPU presentation.
+
+DEV renderer modes: **Fluid Ink**, **Legacy Gradient**, **Motion Debug**. Manual signals: **beat** (one pulse/second), **energy** (0–1 sweep), **spectrum** (lower → middle → upper), **tempo** (60–180 sweep). Before importing, manual signals can preview independently; with a track loaded they respect playback pause. These are isolated visual diagnostics, never injected PCM or event history, and production always uses measured audio.
 
 ```sh
 npm run fixtures
+npm run validate:shader
 ```
 
-This writes 16 original PCM16 mono WAVs in `fixtures/generated/`, at 44.1 and 48 kHz. Copy them to the phone and import through the ordinary picker. `validation-sequence-48000.wav` has five 4-second sections: silence → 100 Hz → 1000 Hz → 4000 Hz → a 440 Hz amplitude ramp. No audio fixture is auto-played or injected into the app pipeline.
-
-Use [the Android checklist](docs/ANDROID_VALIDATION.md) on at least two devices. Check actual samples, response, permissions, pause/resume, seeks, codec support and performance. The current source-level Android limitations cannot be resolved merely by passing these UI checks.
+Fixtures generate the existing 16 original WAVs plus 12 rhythmic WAVs at 44.1/48 kHz: 60/90/120/150 BPM, missing beats and weaker extra onsets. Rhythm clips last 24 seconds. Import them normally; they are not bundled or auto-played. Shader validation uses the existing CanvasKit dependency to compile the actual SKSL and render six desktop preview PNGs under `fixtures/generated/shader/`; this is not native Android GPU validation.
 
 ## Checks
 
@@ -63,18 +47,19 @@ npm run lint
 npm run typecheck
 npm test
 npm run benchmark
+npm run validate:shader
 npx expo-doctor@latest
 npx expo export --platform android --max-workers 2
 ```
 
-Tests cover signal math at 44.1/48/96 kHz, rate estimation, snapshot isolation, timestamp adaptation, bounded buffering, transient resets, normalization, smoothing, safety, gamut conversion, and deterministic PCM-to-color integration.
+The retained DSP/audio/color tests are extended by rhythm, feature-to-visual, UI clock/palette safety, and real synthetic snapshot PCM integration tests. Benchmarks preserve the old comparison and add DSP + rhythm + visual interpretation, including periodic autocorrelation cost. Desktop figures do not certify Android performance.
 
-Validation recorded on October 7, 2026: 34 tests passed, 0 failed; lint and TypeScript passed; Expo Doctor passed 21/21; Android Hermes export passed; Metro started and served an SDK 57 Android manifest. Physical Android playback/Skia rendering was not available in this workspace. Desktop Node benchmark (2048 samples, FFT + features + normalization + color): mean **0.079 ms**, p95 **0.146 ms** over 2000 measured updates after 200 warm-up updates. These are not Android/Hermes runtime measurements or an FPS claim. See [validation details](docs/VALIDATION.md).
+See [validation](docs/VALIDATION.md) and [the physical Android checklist](docs/ANDROID_VALIDATION.md). Native runtime dependencies remain SDK 57 modules or Expo Go supported libraries; [Expo Skia](https://docs.expo.dev/versions/latest/sdk/skia/) and [Reanimated](https://docs.expo.dev/versions/latest/sdk/reanimated/) document support.
 
-## Structure and compatibility
+## Architecture
 
-`app/` contains one experience screen and the Router layout. `src/audio/`, `src/dsp/`, `src/color/`, and `src/visualization/` separate the pipeline. `src/config.ts` centralizes analysis parameters, mapping coefficients, smoothing and safety limits. The original `PRODUCT_REQUIREMENTS.md` is preserved unchanged; this task follows the reduced vertical-slice brief.
+`audio/` → `dsp/` → `music/` → visual interpreter → Reanimated clock/uniforms → Skia RuntimeEffect. The shader performs procedural noise per pixel; JavaScript handles measured features and bounded event history. Color safety has one UI palette slew layer in v2, independent of motion. The original color engine remains for regression tests, and the legacy spatial gradient remains a debug/failure renderer.
 
-Native runtime dependencies are Expo SDK modules or explicitly included in Expo Go: Audio, DocumentPicker, Asset, Router and its linking/constants/status-bar dependencies; Skia; Reanimated/Worklets; safe-area context; screens; slider. Expo CLI selected their SDK 57 versions. `fft.js`, React, React DOM (Router peer), and development tooling are JS/TS packages. No custom native modules were added. [Expo Skia](https://docs.expo.dev/versions/latest/sdk/skia/), [Reanimated](https://docs.expo.dev/versions/latest/sdk/reanimated/) and [Slider](https://docs.expo.dev/versions/latest/sdk/slider/) list Expo Go support.
+[Architecture](docs/ARCHITECTURE.md) · [DSP](docs/DSP.md) · [Rhythm](docs/RHYTHM_ENGINE.md) · [Visual engine](docs/VISUAL_ENGINE.md) · [Limitations](docs/KNOWN_LIMITATIONS.md)
 
-Further details: [architecture](docs/ARCHITECTURE.md), [DSP](docs/DSP.md), [limitations](docs/KNOWN_LIMITATIONS.md).
+The original `PRODUCT_REQUIREMENTS.md` is preserved. True pitch/harmony-to-color remains a future calibrated-audio development-build milestone.

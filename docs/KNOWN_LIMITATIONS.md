@@ -1,6 +1,6 @@
 # Known limitations and feasibility decision
 
-**Do not consider the Android Expo Go feasibility spike proven.** The source and deterministic algorithms are implemented, the JS checks pass and the Android bundle compiles, but no physical device was available for native playback, permission prompts, sample callback or rendered-frame validation.
+**Physical Android acceptance remains pending.** V2 adds procedural ink, musical-event interpretation, tempo/beat heuristics and an immersive player. Desktop algorithm checks, software-Skia shader previews and Android bundling cannot prove native playback, visual responsiveness, GPU performance or genre tuning.
 
 ## Current Expo sampling blockers
 
@@ -19,11 +19,11 @@ The installed iOS `AudioTapProcessor.m` currently calls the sample callback with
 
 ## Correct fallback currently implemented
 
-Android snapshots are analyzed independently, with Hann over the actual packet and zero-padding to the configured FFT size. No unrelated snapshots are stitched into a fictitious 2048-sample waveform. Hz centroid and music-band ratios remain explicitly unavailable; **dimensionless spectral brightness and spectrum thirds** drive the fallback gradient. RMS/flux/onset are real observations of the supplied data, subject to quantization/scaling and incomplete sampling.
+Android snapshots are analyzed independently, with Hann over the actual packet and zero-padding to the configured FFT size. No unrelated snapshots are stitched into a fictitious 2048-sample waveform. Hz centroid and music-band ratios remain explicitly unavailable; **dimensionless spectral brightness and spectrum thirds** drive ink texture and musical character. RMS/flux/onset are real observations of the supplied data, subject to quantization/scaling and incomplete sampling.
 
-Sample-count/timestamp estimation is implemented and tested for genuinely contiguous streams, but is never used on Android snapshots. A WAV source rate is not assumed to be the output/capture rate. No hardcoded sample rate, guessed frequency bands, random colors, simulated features, or microphone-capture workaround are used.
+Sample-count/timestamp estimation is implemented and tested for genuinely contiguous streams, but is never used on Android snapshots. A WAV source rate is not assumed to be the output/capture rate. No hardcoded sample rate, guessed frequency bands, notes, production simulated features, or microphone-capture workaround are used. DEV manual visual signals are explicitly labelled, isolated from audio/event history and disabled in production.
 
-The fallback can test whether *waveform-derived* colors are useful. It cannot prove the original requirement for calibrated 20–250/250–2000/2000–8000 Hz music analysis in current Expo Go on Android. If that calibration is mandatory, the PRD's migration trigger is met: a future development build would need native access to the actual capture/decoder sample rate and preferably contiguous unscaled PCM. No such native changes were made because this task requires Expo Go.
+The relative-region visualizer can test whether waveform-derived musical motion is useful. It cannot prove calibrated 20–250/250–2000/2000–8000 Hz analysis or pitch recognition in Android Expo Go. True note/harmony-to-color remains a future development-build milestone requiring trusted capture/decoder rate and preferably contiguous unscaled PCM, potentially through `react-native-audio-api`. No migration or note inference was added.
 
 ## Device and application limits
 
@@ -34,11 +34,12 @@ The fallback can test whether *waveform-derived* colors are useful. It cannot pr
 - Frequency accuracy, callback latency, UI/GPU frame presentation, headphone/speaker/Bluetooth behavior, TalkBack, font scaling and long-track memory must be checked on hardware.
 - Rolling normalization reflects recent playback, not full-track statistics. Replay/seek resets can produce a different contextual trajectory. The pure mapper is deterministic for identical feature input, and the complete synthetic sequence is deterministic after reset.
 - Stereo averaging may cancel anti-phase content. Android samples are already downmixed mono, so spatial information is unavailable there.
-- Flux between snapshots misses unobserved events and can react to waveform changes/quantization. Onsets are a novelty heuristic, not beat or BPM detection.
-- The color interpretation is experimental. Fixed hues and spectral weighting are artistic hypotheses, without claims of universal music-color meaning or accessibility effectiveness.
+- Flux between snapshots misses unobserved events and can react to waveform changes/quantization. Combined novelty, autocorrelation tempo and PLL beat tracking are deterministic heuristics, not research-grade MIR. Sparse callbacks, very short clicks and syncopation can prevent lock or produce half/double-time ambiguity. Tempo waits for at least eight seconds of history plus agreeing votes; onset-derived motion works while tempo is unknown.
+- Predicted beats can coast through missed events while confidence holds, but they are not proof of observed beat locations. Confidence decays when recent novelty disappears. Every seek conservatively resets tempo history and repeats warm-up.
+- Color and motion interpretation are experimental artistic hypotheses without claims of universal music-color meaning or accessibility effectiveness. Device genre tuning remains pending.
 - Conservative safety limits and dark text scrims are implemented; visual comfort and contrast still require device and user validation. No medical safety certification is claimed.
-- Skia UI frame callbacks target the device's refresh cadence. The debug FPS counts callbacks, not GPU present events. No actual device FPS has been measured.
-- Web is outside this Android-first slice; no CanvasKit web setup is included.
+- Skia UI frame callbacks target the device's refresh cadence. Debug FPS counts callbacks, not GPU present events. Procedural shader cost and thermal behavior remain unprofiled on Android; no actual device FPS has been measured. Optimize octave/warp/detail cost before weakening DSP correctness.
+- Software CanvasKit validates SKSL and renders desktop previews, but does not test native Android GPU backends. Runtime compilation failure falls back to the legacy gradient. Web remains outside this Android-first slice; no web application setup was added.
 - Metro serves an Expo Go development bundle. Expo Go loading/authentication policy can require developer login, and an initial bundle load is not a standalone offline distribution.
 
 See [the physical-device checklist](ANDROID_VALIDATION.md) for the remaining work.

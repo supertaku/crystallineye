@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { rhythmicFixture } from './rhythmic-fixture';
 
 function wav(samples: Float32Array, sampleRate: number): Buffer {
   const bytes = Buffer.alloc(44 + samples.length * 2);
@@ -36,4 +37,12 @@ for (const sampleRate of [44100, 48000]) {
     writeFileSync(join(output, `${name}-${sampleRate}.wav`), wav(samples, sampleRate));
   }
 }
-console.log(`Generated 16 original mono PCM16 WAV fixtures in ${output}`);
+for (const sampleRate of [44100, 48000]) {
+  for (const bpm of [60, 90, 120, 150]) {
+    writeFileSync(join(output, `beat-${bpm}bpm-${sampleRate}.wav`), wav(rhythmicFixture(sampleRate, 24, bpm), sampleRate));
+  }
+  for (const [name, missing, extra] of [['missing-beats', true, false], ['extra-onsets', false, true]] as const) {
+    writeFileSync(join(output, `beat-120bpm-${name}-${sampleRate}.wav`), wav(rhythmicFixture(sampleRate, 24, 120, missing, extra), sampleRate));
+  }
+}
+console.log(`Generated 28 original mono PCM16 WAV fixtures (16 existing + 12 rhythmic) in ${output}`);

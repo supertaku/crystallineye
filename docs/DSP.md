@@ -1,4 +1,4 @@
-# DSP v1
+# DSP foundation and v2 integration
 
 Runtime input is the actual `AudioPlayer` sample event, not synthetic signals, microphone recording or a precomputed timeline. Synthetic WAVs exist solely for tests and deliberate manual import.
 
@@ -39,14 +39,20 @@ Energy uses log RMS (dB), a 20-second exponential location/variance model, a min
 
 Known-rate centroid uses `log1p(Hz/250)/log(33)`; unknown-rate brightness uses `log1p(normalizedCentroid*64)/log(65)`. Both are bounded. Band/spectrum ratios and onset strength are already normalized. This preserves the direction of brightness change rather than mapping raw Hz directly to color.
 
-## Color mapping and temporal behavior
+## Historical color mapping
 
 `perceptual-v1` maps normalized brightness primarily to lightness, energy primarily to chroma, spectral proportions to the gradient's palette composition and onset strength to a small accent. The restrained palette has fixed indigo/violet/amber hues (275°, 320°, 75°). All coefficients reside in `src/config.ts`.
 
-Energy uses 180/650 ms attack/release, brightness 300/750 ms, balance 700/1100 ms, and onset 100/400 ms. The mapper receives these smoothed values, then safety limits output. UI interpolation has a 50 ms time constant followed by the same safety constraints. These intentionally smooth responses mean a musical change is not an instantaneous flash; sub-100 ms visible latency is a measurement goal, not a claim.
+The original `ColorEngine`, `FeatureSmoother`, mapper and limiter remain unchanged and tested for regression comparison. They are no longer stages in the production v2 pipeline, so the old second renderer safety limiter is removed from the primary path.
+
+## Music-event and visual integration
+
+The unchanged timestamped DSP features now feed `MusicEventEngine`. It combines onset, positive normalized energy change and relative spectral redistribution into bounded novelty history. Energy uses 50/300 ms attack/release, brightness 160/450 ms and spectral balance 120/350 ms. Onset and beat pulses retain immediate attacks and configurable exponential decay. Tempo estimates use feature history rather than raw PCM; no sample-rate assumption enters rhythm estimation.
+
+The visual interpreter maps these signals to motion, scale, turbulence, pigment and palette. Reanimated advances time/beat progression between sample callbacks, interpolates ordinary controls and applies a single palette safety layer. Domain-warped noise runs on Skia/GPU. See [rhythm](RHYTHM_ENGINE.md) and [visual engine](VISUAL_ENGINE.md). Real sample-to-visual latency and beat synchronization remain hardware measurement items.
 
 ## Validation
 
 Tests use silence, 100/440/1000/4000 Hz sines, ramps and impulses. Frequency tests run at 44.1/48/96 kHz. Pure-sine centroid tolerances are one FFT bin, and the expected music band must contain >97% of band-limited energy. Additional tests verify bounded buffering, unknown-rate output, rate acquisition/reset, no snapshot stitching, pause transient reset, deterministic mapping, safety slew and gamut conversion.
 
-`npm run benchmark` compares 2048 and 1024 FFT configurations without changing the default. Recorded desktop means: 0.079 ms and 0.038 ms; p95: 0.146 ms and 0.070 ms. Real-device measurements remain pending; callback serialization and rendering are not included in the desktop benchmark.
+`npm run benchmark` preserves the 2048/1024 historical DSP+color comparison and adds snapshot DSP + rhythm + visual interpretation, including periodic autocorrelation. See [current validation measurements](VALIDATION.md). Native capture serialization, UI worklets and shader/GPU rendering are excluded; Android/Hermes performance remains pending.
