@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Music in Color",
+    "name": "Crystallineye",
     "slug": "music-in-color",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -28,7 +28,18 @@
         }
       ],
       "expo-status-bar",
-      "expo-asset"
+      "expo-asset",
+      "expo-dev-client",
+      "./plugins/withWindowsCmake",
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": false,
+          "androidPermissions": ["android.permission.MODIFY_AUDIO_SETTINGS"],
+          "androidForegroundService": false,
+          "disableFFmpeg": false
+        }
+      ]
     ]
   }
 }

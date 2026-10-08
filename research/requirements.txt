@@ -1,0 +1,12 @@
+# Python 3.12 CPU/ONNX setup. Install Basic Pitch separately with --no-deps.
+setuptools==80.9.0
+numpy==1.26.4
+librosa==0.11.0
+onnxruntime==1.23.2
+pretty-midi==0.2.11
+mir-eval==0.8.2
+resampy==0.4.2
+beat-this==1.1.0
+torch==2.9.1
+torchaudio==2.9.1
+matplotlib==3.10.7

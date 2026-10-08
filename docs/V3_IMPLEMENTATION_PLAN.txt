@@ -1,0 +1,1641 @@
+Crystallineye V3 — Composition-Driven Visual Music Engine
+Comprehensive Implementation Plan
+Project objective
+Transform Crystallineye from an audio-reactive procedural visualizer into a deterministic, composition-aware visual music system.
+The current architecture behaves approximately like:
+Music
+  ↓
+Live PCM snapshots
+  ↓
+DSP + approximate tempo
+  ↓
+Visual parameters
+  ↓
+Procedural shader
+  ↓
+Animation that reacts to music
+
+V3 must instead behave like:
+Imported Music
+      ↓
+Decode complete song
+      ↓
+Music Analysis
+      ↓
+Musical Timeline / Score
+      ↓
+Visual Composition Generator
+      ↓
+Visual Score
+      ↓
+Playback clock
+      ↓
+Persistent paint / ink renderer
+
+The central product requirement is:
+The visual composition must be created from the musical composition rather than being an independently animated shader that music merely modulates.
+
+The target sensation is:
+Someone is painting the song.
+
+1. Preserve the Existing V2 as a Baseline
+Do not delete the current implementation.
+The current commit contains useful working systems:
+audio/
+dsp/
+music/
+visualization/
+current FluidInkField
+current beat tracker
+current diagnostics
+current minimal player
+current tests
+
+Tag or branch the current state before beginning V3.
+Suggested branch/tag:
+v2-fluid-reactive
+
+Create the V3 implementation on a separate branch.
+Keep the current fluid renderer available under a DEV-only comparison mode:
+Visualizer V2
+Score-Driven V3
+
+This is important for A/B evaluation.
+2. End the Expo Go Constraint
+V3 should remain an Expo + React Native application, but it should migrate from:
+Expo Go
+
+to:
+Expo Development Build
+
+Do NOT eject to an unmanaged/bare React Native project unless technically required.
+Reason:
+The new requirements need native functionality for:
+- reliable audio decoding;
+- known audio sample rate;
+- full-track PCM analysis;
+- local machine-learning inference;
+- optimized audio processing.
+Expo Go is no longer the appropriate constraint.
+3. Replace the Audio Foundation
+Adopt:
+react-native-audio-api
+
+as the primary audio engine.
+Use it for:
+local-file playback
+known sample rate
+audio decoding
+analysis graph
+transport timing
+
+Do not immediately delete expo-audio.
+Keep the old audio implementation temporarily for regression comparison until the replacement passes validation.
+4. New Audio Architecture
+Create:
+src/audio-v3/
+    audio-engine.ts
+    audio-decoder.ts
+    audio-transport.ts
+    audio-analysis-buffer.ts
+    types.ts
+
+The audio system should expose a common contract:
+type DecodedTrack = {
+  duration: number;
+  sampleRate: number;
+  numberOfChannels: number;
+  pcm: Float32Array;
+};
+
+The analysis pipeline must work on a normalized representation:
+22,050 Hz
+mono
+Float32 PCM
+
+This specifically matches Basic Pitch's expected processing rate.
+5. Decode Once, Analyze Before Playback
+When the user imports a track:
+Import
+  ↓
+Inspect metadata
+  ↓
+Decode at 22.05 kHz
+  ↓
+Downmix to mono
+  ↓
+Run analysis
+  ↓
+Generate visual score
+  ↓
+Cache results
+  ↓
+Player becomes ready
+
+Do not make analysis depend on playback.
+6. Add an Analysis State to the UI
+Current:
+Import
+→ Play
+
+V3:
+Import
+→ Analyze
+→ Play
+
+Keep this screen visually minimal.
+Example:
+crystallineye
+
+Analyzing your music
+
+████████████░░░░ 71%
+
+Finding rhythm…
+
+Stages should include:
+Preparing audio
+Understanding notes
+Finding beats
+Analyzing musical structure
+Painting the visual score
+Ready
+
+Do not expose model/library names to normal users.
+7. Add Resource Limits Before ML
+Whole-song decoding can use significant memory.
+Before decoding:
+read duration
+estimate PCM memory
+
+Initial research limit:
+maximum recommended track duration:
+6 minutes
+
+Calculate actual expected memory before allocating.
+If estimated memory exceeds the configured safe budget:
+do not crash
+
+Instead show:
+This track is too long for full analysis on this device.
+
+Later this can be replaced with streaming/chunked decoding.
+Do not optimize chunked decoding before the score-driven prototype is validated.
+8. Create the New Domain Model: MusicAnalysis
+Create:
+src/analysis/
+
+with:
+analysis-engine.ts
+analysis-cache.ts
+analysis-schema.ts
+versions.ts
+
+The output of music analysis must NOT contain visual instructions.
+It should describe music.
+Example:
+type MusicAnalysis = {
+  version: string;
+
+  track: {
+    hash: string;
+    duration: number;
+    analysisSampleRate: 22050;
+  };
+
+  rhythm: {
+    bpm: number | null;
+    beats: BeatEvent[];
+    downbeats: DownbeatEvent[];
+    meter?: number;
+  };
+
+  notes: NoteEvent[];
+
+  harmony: {
+    chromaFrames: ChromaFrame[];
+    chords: ChordEvent[];
+  };
+
+  dynamics: FeatureFrame[];
+
+  structure: {
+    segments: SectionEvent[];
+  };
+
+  modelVersions: {
+    transcription?: string;
+    beatTracking?: string;
+    structure?: string;
+  };
+};
+
+9. Use Content Hashing
+Calculate a stable hash for each imported audio file.
+Cache analysis using:
+audio hash
++
+analysis schema version
++
+model versions
+
+Example cache key:
+sha256(song)
++
+analysis-v3
++
+basic-pitch-x
++
+beat-this-small-x
+
+If all versions match:
+skip analysis
+
+and load the cached score.
+10. Build a Python Research Oracle First
+Before porting ML models onto Android, create:
+research/music-analysis/
+
+This is critical.
+The mobile implementation should not be the place where we first decide whether the musical interpretation is good enough.
+Python tools:
+Python
+NumPy
+librosa
+Basic Pitch
+Beat This!
+All-In-One
+Matplotlib
+
+The research CLI should accept:
+python analyze.py song.wav
+
+and generate:
+song.analysis.json
+
+matching the mobile MusicAnalysis schema.
+11. Research Beat Tracking with Beat This!
+Use Beat This! in the Python reference implementation.
+Capture:
+beat timestamps
+downbeat timestamps
+beat activations/confidence if available
+
+Test both:
+small0
+final0
+
+Compare quality and processing time.
+The mobile target should initially be:
+small0
+
+because its model footprint is much smaller.
+Do not assume it can be exported to mobile successfully.
+Create a dedicated feasibility spike.
+12. Beat This Mobile Feasibility Spike
+Attempt:
+PyTorch Beat This!
+      ↓
+torch.export
+      ↓
+ExecuTorch
+      ↓
+.pte
+
+Use:
+react-native-executorch
+
+for the experiment.
+The spike must test:
+model export
+model load
+spectrogram preprocessing
+inference
+beat logits
+downbeat logits
+postprocessing
+memory
+runtime
+
+on Android.
+Do not integrate it into production code until this spike passes.
+13. Beat Tracker Decision Gate
+If Beat This! small:
+exports successfully
++
+runs fast enough
++
+memory is acceptable
+
+then use it.
+Otherwise:
+use the new calibrated PCM to implement a stronger deterministic beat tracker.
+That fallback can use:
+mel spectrogram
+spectral flux
+onset envelope
+tempogram
+autocorrelation
+dynamic beat alignment
+
+This will already outperform the current system because V3 has:
+complete continuous PCM
++
+real sample rate
++
+whole-song lookahead
+
+rather than Android snapshot callbacks.
+Never block V3 on one ML model.
+14. Add Downbeats as a First-Class Feature
+V2 primarily cares about repeating beats.
+V3 must distinguish:
+beat
+
+from:
+downbeat
+
+The downbeat usually represents:
+beginning of a measure/bar.
+
+This becomes extremely important visually.
+Mapping:
+DOWNBEAT
+→ new major brush gesture
+
+Ordinary beats should not restart the canvas.
+15. Add Basic Pitch
+Use Spotify Basic Pitch for note transcription.
+Research reference:
+Basic Pitch Python
+
+Mobile candidate:
+Basic Pitch TFLite
++
+react-native-fast-tflite
+
+Basic Pitch provides:
+note onset
+note offset
+MIDI pitch
+confidence/amplitude
+pitch bend
+
+These are the main inputs for the brush system.
+16. Port Basic Pitch Exactly Before Optimizing It
+Do not reimplement the model semantics from memory.
+Study Spotify's official:
+preprocessing
+window sizes
+overlap
+resampling
+model inputs
+output interpretation
+note creation
+thresholds
+
+Port those operations into TypeScript.
+Validate mobile inference against the official Python implementation.
+For the same PCM:
+Python Basic Pitch
+        vs
+Android Basic Pitch
+
+compare:
+raw tensor output
+note onset times
+note pitches
+note durations
+
+before using the results visually.
+17. Basic Pitch Mobile Runtime
+Primary runtime:
+react-native-fast-tflite
+
+Start CPU-only.
+Do not turn on GPU acceleration immediately.
+Establish:
+correctness
+determinism
+memory
+CPU performance
+
+first.
+Then benchmark:
+CPU
+vs
+Android GPU delegate
+
+Enable GPU only if it materially reduces analysis latency without compatibility problems.
+18. Do Not Treat Every Basic Pitch Note as Melody
+A polyphonic song may produce many simultaneous note events.
+The visualizer cannot create one brush stroke for every note.
+That would become visual noise.
+Create:
+src/analysis/melody-extractor.ts
+
+Input:
+Basic Pitch note events
+
+Output:
+dominant melodic contour
+
+Initial heuristic:
+1. prefer high-confidence notes;
+2. favor temporal continuity;
+3. penalize very large pitch jumps;
+4. favor sustained notes;
+5. prefer a single dominant line at a time.
+Use dynamic programming/Viterbi-style path selection if necessary.
+The result should approximately answer:
+Which note sequence would make the most coherent visual brush gesture?
+
+This is an artistic abstraction, not a claim of perfect melody transcription.
+19. Generate Chroma from Notes
+Basic Pitch note events can be reduced into 12 pitch classes:
+C
+C#
+D
+D#
+E
+F
+F#
+G
+G#
+A
+A#
+B
+
+For each analysis frame:
+pitchClass = midiNote % 12
+
+Aggregate active note strengths.
+Normalize:
+chroma[12]
+
+This gives us a harmonic representation without adding another ML model.
+20. Estimate Chords Deterministically
+Do not add a chord ML model yet.
+Use chroma template matching.
+At minimum classify:
+12 major chords
+12 minor chords
+unknown
+
+For each frame/window:
+compare chroma
+against
+major/minor templates
+
+Apply temporal smoothing.
+Output:
+type ChordEvent = {
+  start: number;
+  end: number;
+  root: number;
+  quality: 'major' | 'minor' | 'unknown';
+  confidence: number;
+};
+
+If confidence is weak:
+unknown
+
+is preferable to inventing a chord.
+21. Build Section Segmentation in Two Levels
+For research:
+use:
+All-In-One
+
+as the reference.
+It gives:
+intro
+verse
+chorus
+bridge
+outro
+...
+
+Do not initially try to deploy All-In-One to the phone.
+Its architecture and dependencies make it inappropriate for the first mobile implementation.
+22. Mobile Section Segmentation V1
+On-device V1 only needs:
+section boundaries
+
+not semantic names.
+Use deterministic structural novelty from:
+chroma
+energy
+spectral features
+note density
+
+Build a self-similarity matrix over windows.
+Identify large structural changes.
+Output:
+Section A
+Section B
+Section A'
+Section C
+
+The renderer mainly needs to know:
+A new major musical region has begun.
+
+Labels such as:
+verse
+chorus
+bridge
+
+can come later.
+23. Compare Mobile Segmentation Against All-In-One
+For a research song set:
+generate:
+All-In-One boundaries
+
+and:
+mobile deterministic boundaries
+
+Measure approximate boundary alignment.
+Do not require exact labels.
+If mobile structural boundaries are sufficiently useful visually:
+keep the lightweight implementation.
+Only investigate a section-label ML model if user testing demonstrates real value.
+24. Keep Source Separation Out of V3 Core
+Do not immediately add Demucs or RoFormer to the mobile app.
+Source separation is computationally expensive and should not become a dependency before we prove it solves a visible problem.
+V3 core should first analyze the full mix.
+25. Create a Source-Separation Research Experiment
+Under:
+research/source-separation/
+
+evaluate:
+Demucs
+BS-RoFormer
+MelBand-RoFormer
+
+Compare whether feeding separated stems into Basic Pitch materially improves:
+melody extraction
+harmony
+visual coherence
+
+Possible mappings:
+vocals
+→ melody brush
+
+bass
+→ background current
+
+drums
+→ droplets / splashes
+
+other
+→ harmonic wash
+
+Do NOT ship a source-separation model until:
+visual improvement
+
+clearly justifies:
+model size
+analysis time
+memory
+licensing complexity
+
+Also verify the license of every specific model weight before bundling it.
+26. Separate MusicAnalysis from VisualScore
+This is one of the most important architectural rules.
+Do NOT write:
+ML output
+→ Skia
+
+Use:
+MusicAnalysis
+      ↓
+Visual Composer
+      ↓
+VisualScore
+      ↓
+Renderer
+
+This allows changing the art language without rerunning ML.
+27. Define VisualScore
+Create:
+src/visual-score/
+
+with:
+schema.ts
+composer.ts
+stroke-generator.ts
+palette.ts
+sections.ts
+drops.ts
+washes.ts
+
+Example:
+type VisualScore = {
+  version: string;
+
+  scenes: SceneEvent[];
+
+  strokes: StrokeEvent[];
+
+  drops: DropEvent[];
+
+  washes: WashEvent[];
+
+  accents: AccentEvent[];
+};
+
+28. Scene Events
+A scene roughly corresponds to a musical section.
+type SceneEvent = {
+  start: number;
+  end: number;
+
+  palette: PaletteDefinition;
+
+  brushStyle: BrushStyle;
+
+  density: number;
+
+  backgroundFlow: number;
+
+  seed: number;
+};
+
+A section boundary may:
+shift palette
+change brush direction
+change density
+clear/fade old paint
+introduce new texture
+
+Do NOT make every section an abrupt visual reset.
+Use transitions.
+29. Downbeat → New Brush Gesture
+Each downbeat should normally begin or anchor a major stroke.
+Conceptually:
+measure begins
+     ↓
+brush touches canvas
+     ↓
+stroke begins
+
+The following beats influence the active stroke rather than creating unrelated global pulses.
+This is a major change from V2.
+30. Melody → Brush Trajectory
+Use melody notes to build the path.
+For each melodic phrase/bar:
+time
+→ horizontal progression
+
+pitch
+→ vertical direction
+
+pitch interval
+→ curve direction
+
+note duration
+→ segment length
+
+note confidence
+→ stroke certainty/opacity
+
+Example:
+G4 → A4 → C5 → B4
+
+becomes
+
+       ╭──C
+     ╭─╯   ╲
+G───A       B
+
+Do not simply plot a piano-roll graph.
+Use a smooth cubic spline or Bézier trajectory.
+31. Normalize Pitch Spatially
+Do not map MIDI pitch directly to absolute screen Y.
+Determine:
+track pitch range
+or
+section pitch range
+
+using robust percentiles.
+For example:
+P10 note pitch
+P90 note pitch
+
+Then map this range into a comfortable drawing region.
+This prevents songs in different registers from being pushed entirely to the top or bottom of the screen.
+32. Pitch Class → Hue
+Use pitch class primarily for hue.
+Do NOT claim the mapping is universal.
+Use an internally consistent visual system.
+Recommended:
+circle-of-fifths ordering
+
+around the hue circle:
+C → G → D → A → E → B → F# → C# → G# → D# → A# → F
+
+Harmonically related pitch classes will therefore have neighboring visual colors.
+Allow this mapping to be replaced later.
+33. Harmony → Palette
+The current chord/chroma state should define the supporting paint palette.
+Example:
+C major
+C E G
+
+produces a blend of related pitch colors.
+When harmony changes:
+palette slowly diffuses toward the new chord
+
+Do not instantly repaint the screen.
+34. Energy → Brush Pressure
+Map RMS/dynamics to:
+stroke width
+pigment density
+opacity
+brush pressure
+
+NOT primarily:
+global brightness
+
+Example:
+quiet
+→ thin dry stroke
+
+loud
+→ thick saturated stroke
+
+35. Beat → Pressure Modulation
+An ordinary beat should alter:
+pressure along the active stroke
+
+not make the entire canvas pulse.
+Example:
+downbeat
+████████
+
+beat 2
+██████
+
+beat 3
+███████
+
+beat 4
+█████
+
+This makes rhythm part of the brush gesture.
+36. Percussive Event → Ink Drop
+Strong non-melodic onsets may create droplets.
+type DropEvent = {
+  time: number;
+  position: Point;
+  radius: number;
+  color: Color;
+  strength: number;
+};
+
+Visual:
+snare/kick
+     ↓
+ink hits paper
+     ↓
+ring / bloom / splash
+
+Drops should persist and diffuse briefly.
+They should not flash the entire screen.
+37. Bass → Background Wash
+Low-frequency energy should control a slower visual layer.
+Use it for:
+large undercurrent
+broad wash
+large-scale displacement
+
+This creates visual weight without competing with the melody stroke.
+38. Song Section → Composition
+Section information should control larger-scale visual storytelling.
+Example:
+INTRO
+sparse marks
+
+VERSE
+contained strokes
+
+PRE-CHORUS
+increasing density
+
+CHORUS
+larger gestures
+broader color range
+
+BRIDGE
+new trajectory / negative space
+
+FINAL CHORUS
+strongest layering
+
+These are starting hypotheses.
+Do not hard-code all genres to the same dramatic structure.
+Use section-relative energy to scale effects.
+39. Replace Randomness with Deterministic Seeds
+Visual diversity is useful.
+Random visual timing is not.
+Any visual pseudo-randomness must derive from:
+track hash
+section index
+bar index
+event index
+
+Example:
+seed = hash(trackHash, sectionIndex, barIndex);
+
+The same song must produce the same visual composition on repeated playback.
+This is essential for the feeling that the visualization belongs to the song.
+40. Renderer V3: Persistent Paint
+Create:
+src/paint/
+
+with:
+PaintCanvas.tsx
+StrokeLayer.tsx
+DropLayer.tsx
+WashLayer.tsx
+DiffusionLayer.tsx
+scene-runtime.ts
+score-player.ts
+
+The renderer should no longer be primarily:
+one fullscreen shader
+
+It should combine:
+Skia paths
++
+brush textures
++
+blur
++
+blend modes
++
+small shader post-effects
+
+41. Role of the Existing Fluid Shader
+Do not delete the current FluidInkField.
+Reuse its concepts for:
+subtle distortion
+diffusion
+background motion
+post-processing
+
+Change:
+fluid shader = artwork
+
+into:
+paint events = artwork
+fluid shader = physical medium
+
+42. Stop Using an Independent Animation Clock
+This is extremely important.
+Current V2:
+time += dt × flowSpeed
+
+This creates movement that can continue to feel independent from the music.
+V3's master time must be:
+audio playback position
+
+Every visible event should be derived from:
+songTime
+
+Examples:
+stroke progress =
+(songTime - stroke.start) /
+(stroke.end - stroke.start)
+
+drop age =
+songTime - drop.time
+
+diffusion age =
+songTime - stroke.createdAt
+
+Pause:
+songTime stops
+everything stops
+
+No hidden procedural clock should continue composing independently.
+43. Persistent Stroke Rendering
+Each stroke should remain visible after completion.
+Do not keep every stroke forever at full opacity.
+Within a section:
+completed strokes persist
++
+slowly diffuse/fade
+
+At section transition:
+old scene slowly dissolves
+
+This creates something that feels painted rather than continuously regenerated.
+44. Keep Persistence Section-Local
+For performance, do not maintain every detailed stroke from a 6-minute track forever.
+Keep detailed persistence for:
+current section
++
+possibly previous section
+
+Earlier sections may be:
+flattened
+faded
+or removed
+
+This also gives musical sections visual identity.
+45. Seek Reconstruction
+Seeking must remain deterministic.
+On seek to time T:
+1. find section containing T;
+2. clear runtime paint state;
+3. load that section's VisualScore;
+4. replay score events from section start → T without animation;
+5. render resulting canvas;
+6. resume live playback.
+Because persistence is section-local, seek reconstruction remains bounded.
+46. Minimal UI Remains
+Keep the current successful V2 UI direction.
+Normal playback:
+100% visualization
+
+with:
+minimal bottom player
+
+that auto-hides.
+Do not reintroduce:
+large headers
+diagnostic text
+panels
+settings chrome
+
+during playback.
+47. Import Flow V3
+Final intended flow:
+Launch
+
+        ↓
+
+Import Music
+
+        ↓
+
+Analyzing
+[progress]
+
+        ↓
+
+Visual score generated
+
+        ↓
+
+Fullscreen canvas
+
+        ↓
+
+Play
+
+If cached:
+Import
+→ Load score
+→ Ready
+
+48. Analysis Progress
+The analysis engine should report:
+type AnalysisProgress = {
+  stage:
+    | 'decode'
+    | 'transcription'
+    | 'rhythm'
+    | 'harmony'
+    | 'structure'
+    | 'visual-score';
+
+  stageProgress: number;
+  overallProgress: number;
+};
+
+Do not fake progress.
+If a model does not report exact progress, estimate by processing-window count.
+49. Graceful ML Failure
+Machine learning must not become a single point of failure.
+If Basic Pitch fails:
+use DSP/chroma fallback
+
+If Beat This fails:
+use deterministic beat tracker
+
+If section segmentation fails:
+use fixed phrase/bar grouping
+
+The song should still visualize.
+Use quality tiers:
+FULL
+beats + notes + harmony + structure
+
+PARTIAL
+beats + harmony
+
+BASIC
+DSP only
+
+50. Analysis Confidence
+Every semantic result should carry confidence where possible.
+Example:
+type NoteEvent = {
+  start: number;
+  end: number;
+  midi: number;
+  amplitude: number;
+  confidence: number;
+};
+
+Low-confidence musical information should produce:
+subtle visual influence
+
+rather than dramatic changes.
+51. Do Not Add Mood ML Yet
+Do not implement:
+happy
+sad
+angry
+romantic
+
+in this milestone.
+The visual system should first respond to actual composition:
+rhythm
+notes
+harmony
+structure
+dynamics
+
+Mood classification can later modify artistic style.
+It should not replace musical structure.
+52. Do Not Add LLMs
+No LLM is needed.
+Do not use:
+OpenAI
+Gemini
+Claude
+Llama
+
+for music-to-visual generation.
+This is an audio ML / MIR problem.
+53. Research Evaluation Dataset
+Create a local research set containing legally usable or synthetic music covering:
+pop
+rock
+EDM
+acoustic
+classical
+jazz
+hip-hop
+ballad
+dense polyphonic music
+sparse music
+
+Do not commit copyrighted commercial songs.
+Personal local songs may be used for manual evaluation without entering the repository.
+54. Music Analysis Validation
+Compare mobile outputs with Python references.
+For beat tracking:
+Beat This Python
+vs
+mobile
+
+For notes:
+Basic Pitch Python
+vs
+mobile
+
+For structure:
+All-In-One
+vs
+mobile structural segmentation
+
+Store reports under:
+research/results/
+
+55. Timing Accuracy
+Visual event timing must be measured.
+Targets:
+beat/downbeat visual event:
+within ~50–70 ms of analyzed timestamp
+
+note/stroke onset:
+within one rendered frame where practical
+
+playback/visual drift:
+must not accumulate over time
+
+Do not base synchronization on repeated timer increments.
+Always reference current playback time.
+56. ML Benchmarking
+For each on-device model record:
+model size
+model load time
+analysis time
+peak memory
+CPU/GPU backend
+device model
+Android version
+
+Test at least:
+one midrange Android
+one higher-end Android
+
+Do not claim mobile viability based on desktop performance.
+57. Analysis Performance Gates
+Initial goal:
+A normal song should not require absurd waiting time.
+Measure before defining a hard final SLA.
+After baseline measurement, optimize toward:
+4-minute song:
+preferably analyzed in tens of seconds,
+not several minutes
+
+Optimization sequence:
+1. reduce redundant preprocessing
+2. batch model windows
+3. background/threaded execution
+4. hardware delegate
+5. model quantization if accuracy survives
+
+Do not reduce musical accuracy before measuring where time is actually spent.
+58. Basic Pitch Optimization
+Because Basic Pitch has an official TFLite serialization:
+benchmark:
+float model CPU
+GPU delegate
+possibly quantized variant
+
+Do not introduce unofficial quantization until reference accuracy tests exist.
+59. Beat This Optimization
+If ExecuTorch export succeeds:
+benchmark:
+small model + XNNPACK
+small model + Vulkan if supported
+
+Only attempt the 78 MB model if the small model's accuracy is visibly insufficient.
+The visual product probably does not require research-benchmark-level beat accuracy if the smaller model produces coherent downbeats.
+60. Source Separation Decision Gate
+Only proceed with source separation if:
+Basic Pitch on full mixes
+
+fails to provide visually usable melodic/harmonic data.
+Then run an A/B:
+Full mix Basic Pitch
+
+vs
+
+Separated vocal/instrument Basic Pitch
+
+Judge by:
+melody continuity
+visual coherence
+analysis time
+model footprint
+
+Do not assume separation is automatically worth it.
+61. New Repository Layout
+Target architecture:
+src/
+├── audio-v3/
+│   ├── audio-engine.ts
+│   ├── audio-decoder.ts
+│   ├── audio-transport.ts
+│   └── types.ts
+│
+├── analysis/
+│   ├── analysis-engine.ts
+│   ├── analysis-schema.ts
+│   ├── analysis-cache.ts
+│   ├── feature-extractor.ts
+│   ├── melody-extractor.ts
+│   ├── chroma.ts
+│   ├── chord-estimator.ts
+│   ├── section-segmenter.ts
+│   └── versions.ts
+│
+├── ml/
+│   ├── basic-pitch/
+│   │   ├── model.ts
+│   │   ├── preprocessing.ts
+│   │   └── postprocessing.ts
+│   │
+│   └── beat-this/
+│       ├── model.ts
+│       ├── preprocessing.ts
+│       └── postprocessing.ts
+│
+├── visual-score/
+│   ├── schema.ts
+│   ├── composer.ts
+│   ├── stroke-generator.ts
+│   ├── palette.ts
+│   ├── drops.ts
+│   └── scenes.ts
+│
+├── paint/
+│   ├── PaintCanvas.tsx
+│   ├── ScorePlayer.ts
+│   ├── StrokeLayer.tsx
+│   ├── DropLayer.tsx
+│   ├── WashLayer.tsx
+│   ├── DiffusionLayer.tsx
+│   └── shaders/
+│
+└── legacy-v2/
+
+Do not mechanically move working files until the V3 path is proven.
+62. Research Directory
+Add:
+research/
+├── analysis/
+│   ├── analyze.py
+│   ├── basic_pitch_reference.py
+│   ├── beat_this_reference.py
+│   ├── allinone_reference.py
+│   └── schema.py
+│
+├── source-separation/
+│
+├── fixtures/
+│
+└── results/
+
+The Python reference schema must mirror TypeScript.
+63. V3 Milestone 0 — Freeze Baseline
+Deliver:
+V2 tag/branch
+baseline test results
+baseline screenshot/video
+current performance measurements
+
+Exit:
+V2 can always be restored.
+64. V3 Milestone 1 — Development-Build Migration
+Deliver:
+Expo development build
+react-native-audio-api installed
+old app still launches
+Skia still renders
+Android build succeeds
+
+Do not introduce ML yet.
+Exit:
+Physical Android build runs successfully.
+65. V3 Milestone 2 — New Audio Engine
+Deliver:
+local import
+file-backed playback
+play
+pause
+seek
+known duration
+known sample rate
+decoded 22.05 kHz analysis buffer
+
+Exit:
+A synthetic 440 Hz input is measured correctly.
+This is the first critical calibration test.
+66. V3 Milestone 3 — Python MusicAnalysis Oracle
+Deliver:
+Basic Pitch notes
+Beat This beats/downbeats
+All-In-One sections
+JSON MusicAnalysis
+
+Exit:
+At least five representative songs produce complete analysis JSON.
+67. V3 Milestone 4 — VisualScore Prototype
+Do not integrate mobile ML yet.
+Load the Python-generated MusicAnalysis JSON into the app.
+Build:
+notes → strokes
+downbeats → gesture starts
+beats → pressure
+chords → palette
+sections → scene changes
+
+Exit:
+The visual experience clearly feels more connected to the song than V2.
+This milestone is extremely important.
+Do not spend weeks integrating ML on-device before validating the artistic mapping.
+68. V3 Milestone 5 — Persistent Paint Renderer
+Deliver:
+brush paths
+persistent strokes
+ink drops
+harmonic washes
+section transitions
+subtle fluid diffusion
+
+Exit:
+The visualization resembles:
+paint
+ink
+smoke
+brush gestures
+
+rather than:
+procedural terrain/wallpaper
+
+69. V3 Milestone 6 — Playback Synchronization
+Make:
+audio currentTime
+
+the sole master clock.
+Deliver:
+accurate play
+pause
+seek
+resume
+section reconstruction
+
+Exit:
+Repeated playback produces the same visual events at the same musical timestamps.
+70. V3 Milestone 7 — Basic Pitch On Device
+Deliver:
+TFLite runtime
+Basic Pitch model
+mobile preprocessing
+mobile postprocessing
+Python parity tests
+
+Exit:
+Mobile and Python note timelines are acceptably close.
+71. V3 Milestone 8 — Beat This Mobile Spike
+Deliver:
+ExecuTorch export attempt
+Android model inference
+beat/downbeat output
+benchmark report
+
+Decision:
+PASS
+→ integrate model
+
+FAIL
+→ calibrated deterministic tracker
+
+Do not allow this experiment to block the entire project.
+72. V3 Milestone 9 — Mobile Structural Segmentation
+Deliver:
+chroma self-similarity
+structural novelty
+section boundaries
+
+Compare to All-In-One.
+Exit:
+Boundaries are musically useful enough for visual scene changes.
+73. V3 Milestone 10 — Fully On-Device Analysis
+The user flow must now work without Python:
+Import song
+↓
+Decode
+↓
+Analyze notes
+↓
+Analyze rhythm
+↓
+Analyze harmony
+↓
+Analyze structure
+↓
+Generate VisualScore
+↓
+Play visualization
+
+All offline.
+74. V3 Milestone 11 — Cache and Reuse
+Persist:
+MusicAnalysis
+VisualScore
+
+using the audio hash/version cache.
+Second opening:
+no reanalysis
+
+unless an algorithm/model version changed.
+75. V3 Milestone 12 — Source Separation Evaluation
+Only now evaluate whether:
+Demucs / RoFormer
+
+meaningfully improves visual quality.
+Do not make it part of V3 core unless evidence supports it.
+76. User Evaluation
+Compare:
+A — current V2 Fluid Ink
+B — V3 score-driven paint
+
+Ask users:
+Which visualization feels more connected to the music?
+
+Can you visually identify the beat?
+
+Can you notice when a musical phrase changes?
+
+Can you notice a section change?
+
+Does the movement feel intentional or random?
+
+Does the visual feel like the music is creating it?
+
+The main metric is not:
+Which looks prettier?
+
+It is:
+Which feels authored by the song?
+
+77. V3 Definition of Done
+V3 is successful when:
+✓ music is decoded at a known sample rate
+
+✓ analysis happens before playback
+
+✓ beat timestamps are known
+
+✓ downbeat timestamps are known
+
+✓ note events are available
+
+✓ chroma/harmony is available
+
+✓ structural boundaries are available
+
+✓ MusicAnalysis is cached
+
+✓ VisualScore is separate from MusicAnalysis
+
+✓ brush strokes originate from musical phrases
+
+✓ pitch influences brush trajectory/color
+
+✓ dynamics influence stroke pressure
+
+✓ beats influence strokes rather than global screen pulses
+
+✓ downbeats initiate major gestures
+
+✓ harmony influences palette
+
+✓ percussive events can create ink drops
+
+✓ sections alter visual composition
+
+✓ strokes persist long enough to feel painted
+
+✓ fluid shaders are supporting effects rather than autonomous animation
+
+✓ playback time is the only master timeline
+
+✓ seeking reconstructs the correct scene
+
+✓ repeated playback is deterministic
+
+✓ bottom player remains minimal and auto-hiding
+
+✓ normal playback can be visually full-screen
+
+✓ no cloud services are required
+
+✓ no LLMs are required
+
+78. Explicit Non-Goals for This Cycle
+Do NOT add:
+Spotify integration
+Apple Music integration
+YouTube
+accounts
+cloud inference
+social features
+haptics
+lyrics
+sign language
+LLMs
+music recommendation
+generative image models
+3D rendering
+
+The objective remains:
+Translate the composition of a locally imported song into a synchronized persistent visual painting.
+
+79. Technical Decision Summary
+Use:
+React Native
+Expo Development Build
+TypeScript
+React Native Skia
+Reanimated
+React Native Audio API
+
+Basic Pitch
+→ note transcription
+→ TFLite
+→ react-native-fast-tflite
+
+Beat This!
+→ beats/downbeats
+→ investigate ExecuTorch deployment
+
+All-In-One
+→ research/reference section analysis
+
+Classic DSP
+→ loudness
+→ spectral data
+→ chroma support
+→ structural segmentation
+
+Skia paths + filters
+→ persistent paint
+
+RuntimeEffect
+→ subtle fluid/diffusion/post-processing
+
+Do NOT use ML to directly generate the visuals.
+ML should answer:
+What is happening musically?
+
+The deterministic Visual Composer should answer:
+How should that musical information be painted?
+
+80. Core Architectural Principle
+The final system should have three separate layers:
+             MUSIC
+
+               ↓
+
+       ┌──────────────┐
+       │ MUSIC        │
+       │ UNDERSTANDING│
+       └──────┬───────┘
+              │
+        MusicAnalysis
+              │
+              ▼
+       ┌──────────────┐
+       │ VISUAL       │
+       │ COMPOSITION  │
+       └──────┬───────┘
+              │
+          VisualScore
+              │
+              ▼
+       ┌──────────────┐
+       │ PAINT        │
+       │ RENDERER     │
+       └──────────────┘
+
+Never collapse these layers together.
+Final Product Principle
+Crystallineye should stop asking:
+How should this shader react to the current sound?
+
+It should ask:
+What is happening in this composition, and what brush gesture represents it?
+
+The intended visual grammar is:
+SECTION
+→ visual scene
+
+DOWNBEAT
+→ new brush gesture
+
+BEAT
+→ pressure / articulation
+
+MELODY
+→ stroke trajectory
+
+PITCH
+→ hue / vertical direction
+
+HARMONY
+→ palette
+
+DYNAMICS
+→ width / pigment
+
+PERCUSSION
+→ ink drops / splashes
+
+BASS
+→ broad undercurrent
+
+REST
+→ negative space
+
+SONG TIME
+→ master visual clock
+
+The goal is no longer:
+Audio-reactive visuals.
+
+The goal is:
+A visual performance generated from the musical score.
+
+
+The one part I would be strict about is **Milestones 3–6 before on-device ML integration**. First use Python/desktop models to generate very high-quality `MusicAnalysis` for several songs and prove that the new brush/ink language actually solves your complaint. If the score-driven painting still does not feel like the music, mobile model engineering will not fix the artistic mapping.
+
+Once the score-driven renderer works, moving Basic Pitch and beat/downbeat analysis onto Android becomes an engineering problem rathe

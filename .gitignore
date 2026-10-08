@@ -7,3 +7,10 @@ coverage/
 android/
 ios/
 fixtures/generated/
+.venv-research/
+__pycache__/
+research/fixtures/generated/
+research/results/generated/
+research/models/
+.gradle-v3/
+.build-tools/

@@ -3,5 +3,5 @@ const expo = require('eslint-config-expo/flat');
 
 module.exports = defineConfig([
   expo,
-  { ignores: ['dist/**', 'fixtures/generated/**'] },
+  { ignores: ['dist/**', 'fixtures/generated/**', 'android/**', 'ios/**', '.venv-research/**', 'research/fixtures/generated/**', 'research/results/generated/**'] },
 ]);
