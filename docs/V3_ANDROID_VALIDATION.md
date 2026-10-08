@@ -1,5 +1,9 @@
 # V3 native validation
 
+## V3.1 handoff
+
+No physical phone was available during the remediation; the user asked to document the remaining gate. Use [Android performance](ANDROID_PERFORMANCE.md) and [remediation validation](V3_REMEDIATION_VALIDATION.md) for current build/software results. Behind the triple-tap DEV panel, run A synthetic/simple, B native/simple, C synthetic/full and D native/full. Record retained clock samples, save JSON, and navigate previous/next musical events. Pair source/supplied-time traces with actual presented frame profiling and audible event measurements. Prior emulator evidence below remains historical.
+
 This checklist records physical tests still to run. A subset passed in the Android 14 emulator; [current status](V3_STATUS.md) records that narrower evidence. Run on a mid-range and a higher-end physical Android phone. Keep model/version, device, OS, thermal state, track hash and actual observations with each report.
 
 ## Build and comparison

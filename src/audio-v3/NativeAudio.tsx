@@ -7,15 +7,19 @@ export function NativeAudio({ uri, transport, onReady, onError, onEnded, onBuffe
   uri: string; transport: AudioTransport; onReady: () => void; onError: (message: string) => void; onEnded: () => void; onBuffering: (value: boolean) => void;
 }) {
   const handle = useRef<AudioTagHandle>(null);
-  const readyCallback = useRef(onReady);
-  useEffect(() => { readyCallback.current = onReady; }, [onReady]);
+  const callbacks = useRef({ onReady, onError, onEnded, onBuffering });
+  useEffect(() => { callbacks.current = { onReady, onError, onEnded, onBuffering }; }, [onReady, onError, onEnded, onBuffering]);
   const loaded = useCallback(() => {
     try {
       if (!handle.current) throw new Error('The audio player is unavailable.');
-      transport.attach(nativeClockSource(handle.current)); readyCallback.current();
-    } catch (error) { onError(error instanceof Error ? error.message : String(error)); }
-  }, [transport, onError]);
+      transport.attach(nativeClockSource(handle.current)); callbacks.current.onReady();
+    } catch (error) { callbacks.current.onError(error instanceof Error ? error.message : String(error)); }
+  }, [transport]);
+  const failed = useCallback((error: Error) => callbacks.current.onError(error.message), []);
+  const finished = useCallback(() => callbacks.current.onEnded(), []);
+  const waiting = useCallback(() => callbacks.current.onBuffering(true), []);
+  const resumed = useCallback(() => callbacks.current.onBuffering(false), []);
   useEffect(() => () => { try { transport.detach(); } catch { /* Native disposal already completed. */ } }, [transport]);
   return <Audio ref={handle} source={uri} controls={false} autoPlay={false} onLoad={loaded}
-    onError={(error) => onError(error.message)} onEnded={onEnded} onWaiting={() => onBuffering(true)} onPlaying={() => onBuffering(false)} />;
+    onError={failed} onEnded={finished} onWaiting={waiting} onPlaying={resumed} />;
 }

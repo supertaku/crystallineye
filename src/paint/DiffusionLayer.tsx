@@ -4,7 +4,7 @@ import type { SceneEvent } from '../visual-score/schema';
 import { markOpacity } from './scene-runtime';
 
 export function DiffusionLayer({ path, progress, time, scene, createdAt, color, width, reducedMotion }: {
-  path: SkPath; progress: SharedValue<number>; time: SharedValue<number>; scene: SceneEvent; createdAt: number; color: string; width: number; reducedMotion: boolean;
+  path: SkPath | SharedValue<SkPath>; progress: SharedValue<number>; time: SharedValue<number>; scene: SceneEvent; createdAt: number; color: string; width: number; reducedMotion: boolean;
 }) {
   const opacity = useDerivedValue(() => markOpacity(scene, createdAt, time.value) * 0.055);
   const blur = useDerivedValue(() => reducedMotion ? 2 : Math.min(6, 1.5 + Math.max(0, time.value - createdAt) * 0.08));

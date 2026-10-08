@@ -114,6 +114,7 @@ test('transport reads native time, freezes on pause/stall and never accumulates 
   transport.pause(); time = 90; assert.equal(transport.currentTime(), 37.123); assert.equal(paused, 1);
   transport.seek(5); assert.equal(sought, 5); transport.play();
   assert.equal(transport.currentTime(), 5);
+  time = 5.03; assert.equal(transport.currentTime(), 5.03);
   time = 5.3; assert.equal(transport.currentTime(), 5.3);
   transport.setBuffering(true); time = 100; assert.equal(transport.currentTime(), 5.3);
   transport.setBuffering(false); time = 5.4; assert.equal(transport.currentTime(), 5.4);

@@ -6,6 +6,7 @@ import hashlib
 import json
 import platform
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 from time import perf_counter
 
@@ -118,7 +119,21 @@ def analyze(path: Path, args):
     try:
         if args.structure == "dsp":
             raise ImportError("DSP structure explicitly selected")
-        sections, versions["structure"] = analyze_sections(path, duration, args.allinone_json)
+        structure_started = perf_counter()
+        prepared_structure = None
+        if not args.allinone_json and (args.structure_backend == "infer" or
+                (args.structure_backend == "auto" and find_spec("allin1_infer") is not None)):
+            # Preserve the original stereo decode for All-In-One's internal
+            # separation while the final MusicAnalysis keeps the source MP3 hash.
+            source_stereo, source_rate = sf.read(path, dtype="float32", always_2d=True)
+            prepared_structure = destination / "structure-input.wav"
+            sf.write(prepared_structure, source_stereo, source_rate, subtype="FLOAT")
+            del source_stereo
+        sections, versions["structure"] = analyze_sections(path, duration, args.allinone_json,
+            backend=args.structure_backend, prepared_audio=prepared_structure, output_directory=destination / "allinone")
+        report["models"]["structure"] = {"modelVersion": versions["structure"],
+            "elapsedSeconds": perf_counter() - structure_started, "sourceHash": digest,
+            "preparedInput": str(prepared_structure) if prepared_structure else None}
         warnings.append("All-In-One does not provide segment confidence; 0.5 is an uncalibrated placeholder.")
     except Exception as error:
         if args.structure == "allinone" or args.strict:
@@ -148,6 +163,8 @@ def main():
     parser.add_argument("--beat-model", choices=["small0", "final0"], default="small0")
     parser.add_argument("--compare-beats", action="store_true")
     parser.add_argument("--structure", choices=["auto", "allinone", "dsp"], default="auto")
+    parser.add_argument("--structure-backend", choices=["auto", "infer", "legacy"], default="auto",
+                        help="Prefer modern all-in-one-infer when available; legacy explicitly uses allin1")
     parser.add_argument("--allinone-json", type=Path)
     parser.add_argument("--strict", action="store_true", help="Require all three official models; never pass a milestone with fallback output")
     args = parser.parse_args()

@@ -1,5 +1,11 @@
 # V3 architecture
 
+## V3.1 remediation update — 2026-10-08
+
+The current composer is `paint-composer-3.1`. It preserves brush endpoints and velocities across gestures, lifts contact at selected rests/decoded silence, emits timed harmonic palette keyframes and local pressure accents, and places transient drops near the brush. Paint uses continuous pressure ribbons and exact-time cubic prefixes. Native seeks use a bounded acknowledgment window; DEV A–D experiments and a bounded clock trace isolate score, delivery and scene commit timing. See [brush architecture](BRUSH_RENDERING_ARCHITECTURE.md), [mapping](MUSIC_VISUAL_MAPPING.md), and [validation](V3_REMEDIATION_VALIDATION.md).
+
+The exact local True Colors MP3 now has a complete desktop reference from Basic Pitch 0.4.0, Beat This 1.1.0 and All-In-One-Infer 3.1.0. Mobile import still runs DSP without note transcription. Device/listening gates remain open; no mobile inference library was added. The original foundation description below is retained, with the new documents superseding its composer/renderer and All-In-One details.
+
 `Local file → normalized PCM → MusicAnalysis → VisualScore → audio currentTime → Skia paint`
 
 The three central jobs are separate. Analysis contains musical events and their uncertainty. Composition makes replaceable artistic choices. Paint renders those choices at a supplied song position. Composer changes never require model inference to run again.

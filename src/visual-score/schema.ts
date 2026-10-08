@@ -1,9 +1,10 @@
 export type Point = { x: number; y: number };
 export type PaletteDefinition = { ink: string; support: string; wash: string; background: string };
 export type SceneEvent = { index: number; start: number; end: number; palette: PaletteDefinition; brushStyle: 'dry' | 'wet'; density: number; backgroundFlow: number; seed: number };
-export type StrokePoint = Point & { time: number; width: number; opacity: number; color: string };
+export type StrokePoint = Point & { time: number; width: number; opacity: number; color: string; velocity?: Point };
 export type StrokeEvent = { id: string; sceneIndex: number; start: number; end: number; points: StrokePoint[]; confidence: number };
 export type DropEvent = { id: string; sceneIndex: number; time: number; position: Point; radius: number; color: string; strength: number };
 export type WashEvent = { id: string; sceneIndex: number; start: number; end: number; position: Point; radius: number; color: string; opacity: number; flow: number };
-export type AccentEvent = { time: number; strokeId: string; pressure: number };
-export type VisualScore = { version: string; analysisKey: string; trackHash: string; duration: number; scenes: SceneEvent[]; strokes: StrokeEvent[]; drops: DropEvent[]; washes: WashEvent[]; accents: AccentEvent[] };
+export type AccentEvent = { time: number; duration?: number; strokeId: string; pressure: number };
+export type PaletteKeyframe = { time: number; palette: PaletteDefinition; confidence: number };
+export type VisualScore = { version: string; analysisKey: string; trackHash: string; duration: number; scenes: SceneEvent[]; strokes: StrokeEvent[]; drops: DropEvent[]; washes: WashEvent[]; accents: AccentEvent[]; paletteTimeline?: PaletteKeyframe[] };

@@ -15,7 +15,9 @@
     "validate:shader": "tsx scripts/validate-shader.ts",
     "validate:paint": "tsx scripts/validate-paint.ts",
     "validate:reference": "tsx scripts/validate-reference.ts",
-    "fixtures:v3": "tsx scripts/generate-v3-fixtures.ts"
+    "fixtures:v3": "tsx scripts/generate-v3-fixtures.ts",
+    "benchmark:v3": "tsx scripts/benchmark-v3.ts",
+    "compare:reference": "tsx scripts/compare-true-colors.ts"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",

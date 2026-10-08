@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseMusicAnalysis } from '../src/analysis/analysis-schema';
 import { extractFeatures } from '../src/analysis/feature-extractor';
@@ -11,6 +11,8 @@ async function main() {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === 'paint') continue;
     const folder = join(root, entry.name);
+    // Diagnostic/capture folders share this ignored root; only references have both files.
+    if (!existsSync(join(folder, 'song.analysis.json')) || !existsSync(join(folder, 'normalized.f32'))) continue;
     const analysis = parseMusicAnalysis(JSON.parse(readFileSync(join(folder, 'song.analysis.json'), 'utf8')));
     const bytes = readFileSync(join(folder, 'normalized.f32'));
     const pcm = new Float32Array(bytes.length / 4);

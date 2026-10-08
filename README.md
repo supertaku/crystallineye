@@ -2,7 +2,7 @@
 
 An Android-first, offline visual music prototype built with Expo, React Native and Skia. V3 analyzes the whole imported file, composes a deterministic visual score, and reveals persistent brush marks using the audio player's actual position.
 
-The V3 foundation and desktop reference prototype are implemented. **The mobile app currently uses measured DSP analysis; on-device note transcription is pending the required music/art evaluation gate.** Python Basic Pitch and Beat This outputs can already drive the renderer through the developer JSON loader. All-In-One and physical Android validation remain open. See [current status](docs/V3_STATUS.md) for evidence and milestone limits.
+V3.1 preserves continuous brush motion, consumes beat pressure accents, follows a timed harmonic palette, and fixes stale rapid-seek acknowledgment. **The mobile app currently uses measured DSP analysis; on-device note transcription is pending the music/art evaluation gate.** Basic Pitch, Beat This and All-In-One-Infer have run locally on the exact True Colors recording; their complete reference can drive the DEV JSON loader. Physical Android and listening validation remain open. See [remediation validation](docs/V3_REMEDIATION_VALIDATION.md), [music mapping](docs/MUSIC_VISUAL_MAPPING.md) and [current status](docs/V3_STATUS.md).
 
 ## Run V3
 

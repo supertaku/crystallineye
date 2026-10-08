@@ -2,6 +2,8 @@
 
 The reference tools write the same MusicAnalysis accepted by V3. These models are desktop research dependencies; none is bundled into the mobile app.
 
+V3.1 update, 2026-10-08: the exact local True Colors MP3 now has a FULL reference using All-In-One-Infer 3.1.0, Basic Pitch 0.4.0 and Beat This 1.1.0. The older `allin1==1.1.0` import failure below remains a legacy-path result. See [actual song analysis](../docs/TRUE_COLORS_ANALYSIS.md) and [the tested overlay setup](../docs/ML_FEASIBILITY.md) for versions, commands, provenance, local outputs and open listening/device gates. One complete recording does not fulfill the five-song study.
+
 ## Setup
 
 The tested Windows setup uses Python 3.12.14 with ONNX CPU inference for Basic Pitch and PyTorch CPU inference for Beat This. Create a separate environment:
@@ -14,7 +16,7 @@ python -m venv .venv-research
 
 Basic Pitch's default TensorFlow pin does not resolve on this Python version. The official package also includes its ONNX model, which the wrapper explicitly selects. The requirements include its ONNX path's dependencies and setuptools 80.9.0 because resampy imports the removed `pkg_resources` helper. This environment deliberately omits TensorFlow/CoreML/TFLite; their upstream import warnings do not mean ONNX failed.
 
-All-In-One needs the upstream installation procedure, including madmom and a compatible NATTEN build. Installing `allin1==1.1.0` alone does not install those native dependencies. On the current Windows host, madmom has no matching binary wheel, no Visual Studio C++ compiler was found, and no WSL distribution was listed. The adapter is present but actual All-In-One inference remains unvalidated. Use a compatible separately prepared desktop environment or import an upstream analysis JSON with a verifiable exact source file.
+The legacy All-In-One package needs its upstream installation procedure, including madmom and a compatible NATTEN build. Installing `allin1==1.1.0` alone did not supply those dependencies on this host. The newer tested `all-in-one-infer==3.1.0` overlay uses pure PyTorch attention and imported successfully; the adapter now prefers it when present. Keep either workflow in a separately prepared desktop environment, and validate the exact source identity when importing upstream results.
 
 ## Run
 
@@ -51,7 +53,7 @@ npm run validate:reference
 npm run validate:paint -- research/results/generated/pop-8ad8874d7c15/song.analysis.json
 ```
 
-Evaluation matches synthetic known notes by pitch and 70 ms onset tolerance, measures beat/downbeat F1 at 70 ms, and compares internal section boundaries at three seconds. It writes `evaluation.json` and timeline plots. TypeScript validation reads Python JSON, recomputes measured DSP on the exact PCM, and checks deterministic composition/seek. Paint validation compiles the actual pigment shader and renders seven frames; repeat frames after a simulated seek must be byte-identical.
+Evaluation matches synthetic known notes by pitch and 70 ms onset tolerance, measures beat/downbeat F1 at 70 ms, and compares internal section boundaries at three seconds. It writes `evaluation.json` and timeline plots. TypeScript validation reads Python JSON, recomputes measured DSP on the exact PCM, and checks deterministic composition/seek. V3.1 paint validation compiles the actual pigment shader and samples timeline/boundary frames plus fallback, reduced-motion, simple-brush and accent comparisons; repeat frames after a simulated seek must be byte-identical.
 
 The ten generated arrangement names span the requested categories but are simple synthesis fixtures, not representative recordings of those genres. Keep personal songs local; don't commit copyrighted commercial audio. Their ground-truth JSON is explicitly identified as synthetic truth, never labeled as inferred ML output.
 

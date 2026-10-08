@@ -1,5 +1,7 @@
 # Reference run — 2026-10-08
 
+V3.1 follow-up: the five synthetic results below are preserved as the earlier baseline. Actual True Colors Basic Pitch/Beat This inference and All-In-One-Infer 3.1.0 structure inference have since produced one FULL exact-source reference. [The song report](../../docs/TRUE_COLORS_ANALYSIS.md) records that run; [validation](../../docs/V3_REMEDIATION_VALIDATION.md) records the final code/render/build checks. The five representative complete analyses and listening/device acceptance remain open.
+
 Five original 32-second synthetic arrangements were analyzed on Windows 11 using Basic Pitch 0.4.0's official ONNX model and Beat This 1.1.0 with both small0 and final0. All-In-One import failed because madmom is unavailable, so every result is PARTIAL with explicit DSP structural fallback.
 
 These fixtures validate the pipeline and expose errors. They do not establish model quality on representative real music or pass the complete reference milestone.

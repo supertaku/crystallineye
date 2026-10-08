@@ -1,5 +1,11 @@
 # V3 status — 2026-10-08
 
+## V3.1 remediation
+
+Remediation work is on `codex/v3-music-alignment-remediation`, starting from actual clean commit `e498f9941ba615c9b7b597baf06a4f845eb565aa`. Proven fixes cover bar-origin jumps, pressure/path joins, unused accents, rapid-seek stale clock acknowledgment, sustained-note truncation and harmonic timing. Real Basic Pitch, both Beat This checkpoints and All-In-One-Infer completed locally on the exact True Colors MP3; complete reference JSON remains local/ignored.
+
+The former original All-In-One dependency blocker is resolved for this reference via isolated `all-in-one-infer==3.1.0`, while the original `allin1` environment is preserved. Music/renderer unit and desktop evidence is substantially stronger. Physical-device and paired listening acceptance remain open: the user confirmed no phone is available. Mobile ML, broad paint-realism redesign and the conditional stem A/B experiment remain gated. [Remediation validation](V3_REMEDIATION_VALIDATION.md) is the current check record; the foundation evidence/table below is historical and not a claim that every milestone is now accepted.
+
 The foundation and desktop score-driven prototype are implemented on `codex/composition-driven-v3`. The project has reached the required music/art review stage, with open exit criteria. The full V3 roadmap is not complete.
 
 ## Completed evidence
