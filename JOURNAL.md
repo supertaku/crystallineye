@@ -893,3 +893,7 @@ The available implementation and research handoff is finished. I have not declar
 ### Step 21 — Preparing the repository update
 
 I read the current journal and checked the working tree on `codex/v3-music-alignment-remediation`. It contains the V3.1 clock, music-contour, paint-rendering changes, their regression checks, and the requested reports. The track metadata report is text; the track-specific JSON and the personal MP3 remain ignored by the existing project rules. I will commit the remaining project files and push this branch's history to GitHub `main`. I did not rerun checks during this push task; the detailed earlier results remain in Step 20 and the validation reports.
+
+### Step 22 — Pushing the remediation
+
+I committed the staged V3.1 source, tests, research tools, and reports as `234b7ec`. GitHub accepted it on `main`, advancing from `e498f99`. The ignored personal audio and song-specific JSON stayed local. I did not rerun app checks for this push; the implementation and validation evidence is recorded above and in the new reports. I am syncing this completion note now.
