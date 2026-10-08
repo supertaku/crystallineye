@@ -120,3 +120,7 @@ I kept the milestone table honest: the foundation, desktop references and native
 ### Step 11 — Checking the GitHub target
 
 I checked the current branch and working tree before pushing. The V3 files are on `codex/composition-driven-v3`, and GitHub's `main` still points to the shared base commit `2a9a9b0`. I'll commit the current project changes here and push that commit to `main`, so the V3 work is available on the branch you asked for.
+
+### Step 12 — Pushing to main
+
+I committed the V3 project changes as `385f3ef` and pushed them to GitHub's `main`. GitHub accepted the update from `2a9a9b0`; I haven't run any new app checks during this push task. I'm recording this completion so the next work starts from the right repository state.
